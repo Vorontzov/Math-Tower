@@ -1,0 +1,1 @@
+export default Object.freeze({ id: 'readiness', title: 'Readiness practice', description: 'Fractions, percentages and two-step equations. A starter bank, not a complete exam curriculum.', resolve: (socket, seed) => ['fraction', 'percent', 'equation'][seed % 3] });

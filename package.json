@@ -1,0 +1,13 @@
+{
+  "name": "math-tower",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A modular mathematical adventure: 1,000 Towers and 999 Interludes.",
+  "scripts": {
+    "dev": "node tools/serve.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "check": "node tools/validate-campaign.mjs"
+  },
+  "engines": { "node": ">=22" }
+}

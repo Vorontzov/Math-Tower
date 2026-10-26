@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101e29">
+  <meta name="description" content="Descend into a mathematical mystery. Explore impossible towers, escape across campus, and think your way through every threshold.">
+  <title>Math Tower — The First Correspondence</title>
+  <link rel="icon" href="./assets/tower.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./core/app.js"></script>
+</head>
+<body>
+  <header class="masthead">
+    <a class="wordmark" href="./" aria-label="Math Tower home"><span class="mark">M</span> MATH TOWER <small>THE CORRESPONDENCE PROJECT</small></a>
+    <span class="edition">OPENING CHAPTER <b>01</b></span>
+  </header>
+  <main>
+    <section id="home" class="home">
+      <div class="intro">
+        <p class="eyebrow"><span class="signal"></span> UNIVERSITY ARCHIVE / INCIDENT 001</p>
+        <h1>The building<br>has changed.<br><em>Think your way out.</em></h1>
+        <p class="lede">Eighteen floors. A locked museum. An experiment that should never have worked. Every answer opens a door. Every door raises a question.</p>
+        <div class="launch">
+          <button id="resume" class="primary" hidden>Continue expedition <span>→</span></button>
+          <button id="new-run" class="primary">Enter Math Tower <span>→</span></button>
+        </div>
+        <p id="save-summary" class="fine">Math from the first door. No countdown while you calculate.</p>
+        <div class="bank-control">
+          <label for="bank">YOUR MATH PATH</label>
+          <select id="bank"><option value="foundations">Foundations · gentle arithmetic</option><option value="readiness">Readiness · fractions, percentages & equations</option></select>
+          <p id="bank-description" class="fine">The adventure stays the same. Choose the practice that fits you.</p>
+          <label class="import-link" for="bank-file">Import a teacher’s question bank <span>→</span></label>
+          <input id="bank-file" type="file" accept=".json,application/json" class="visually-hidden">
+          <p id="import-status" class="fine" role="status"></p>
+        </div>
+      </div>
+      <div class="tower-art" aria-hidden="true">
+        <div class="art-sky"><i></i><i></i><i></i><i></i></div>
+        <div class="art-moon"></div><div class="art-tower"><div class="roof-light"></div><div class="art-grid"></div><div class="art-shaft"></div><span class="floor-label">18</span><span class="floor-ghost">19?</span><div class="art-door"></div></div>
+        <div class="art-plinth"></div><div class="art-caption"><span>ARCHITECTURAL SURVEY</span><strong>ONE FLOOR UNACCOUNTED FOR</strong><span>22:47:06 / SIGNAL UNSTABLE</span></div>
+      </div>
+      <div class="chapter-strip"><span>FIRST EXPEDITION</span><b>Tower 1</b><span class="connector">↓</span><b>18 floors · 3 basements</b><p>The night everything went wrong.</p></div>
+      <section class="chapter-map" aria-labelledby="chapter-heading"><div class="section-label"><h2 id="chapter-heading">The first correspondence</h2><span>FOLLOW THE SIGNAL ↓</span></div><ol id="stage-list"></ol></section>
+      <details class="field-notes"><summary>Field notes · controls, learning & the larger campaign</summary><div class="notes-grid">
+        <div><h3>Move. Observe. Descend.</h3><p>A/D or ←/→ move. Space jumps. ↑/↓ call or ride lifts and use stairs at marked landings. E opens panels. X sends a stun pulse; C shoves. P or Escape pauses. Touch controls are below the scene.</p></div>
+        <div><h3>Take time to think.</h3><p>All formal answers are typed. Math pauses the action; retries cost no health. “Work it through” checks each calculation before showing the next. Progress saves in this browser.</p></div>
+        <div><h3>A much larger mystery.</h3><p>The full campaign is planned as 1,000 Towers and 999 math-supported Interludes across many genres. This first release contains Tower 1 only. Future adventures will follow their completed scripts.</p></div>
+      </div></details>
+    </section>
+    <section id="play" hidden aria-label="Active adventure">
+      <div class="game-heading"><div><p id="stage-kind" class="eyebrow"></p><h1 id="stage-title"></h1></div><div class="game-actions"><button id="sound" aria-pressed="false">Sound off</button><button id="pause">Pause</button><button id="home-button">Journal</button></div></div>
+      <div class="hud"><span id="place"></span><span id="health"></span><span id="progress"></span><span id="objective"></span></div>
+      <div class="canvas-frame"><canvas id="scene" width="1050" height="600" tabindex="0" aria-label="Tower adventure. Use arrows to move and E to interact. Full controls are in Field notes."></canvas><div class="canvas-edge"></div></div>
+      <div class="game-caption"><span id="hint"></span><span id="save-status">Progress saved locally</span></div>
+      <div class="touch-controls" aria-label="Game controls"><div><button data-control="left" aria-label="Move left">←</button><button data-control="right" aria-label="Move right">→</button><button data-control="up" aria-label="Up stairs or lift">↑</button><button data-control="down" aria-label="Down stairs or lift">↓</button></div><div><button data-control="jump">Jump</button><button data-control="stun">Stun</button><button data-control="interact">Use / E</button></div></div>
+      <div id="transmission" class="transmission" role="status"><span>FIELD SIGNAL</span><p id="message">Follow the illuminated panels.</p></div>
+    </section>
+    <p id="global-status" class="global-status" role="status"></p>
+  </main>
+  <footer><span>MATH TOWER <span class="muted">/ THE FIRST CORRESPONDENCE</span></span><a href="https://github.com/Vorontzov/Math-Tower" target="_blank" rel="noopener">Project archive →</a></footer>
+  <dialog id="brief-dialog" aria-labelledby="brief-title"><p id="brief-kind" class="eyebrow"></p><h2 id="brief-title"></h2><p id="brief-copy" class="dialog-copy"></p><p id="brief-controls" class="fine"></p><button id="begin" class="primary">Begin expedition <span>↓</span></button></dialog>
+  <dialog id="math-dialog" aria-labelledby="math-label">
+    <div class="dialog-top"><p class="eyebrow">THRESHOLD CONTROL</p><span class="safe-tag">WORLD PAUSED</span></div>
+    <h2 id="math-label"></h2><p id="math-skill" class="fine"></p><p id="math-question" class="math-question"></p>
+    <p id="math-hint" class="hint-box" hidden></p>
+    <div id="guide" hidden><p id="guide-position" class="eyebrow"></p><ol id="checked-steps"></ol><p id="step-prompt"></p></div>
+    <form id="answer-form"><label id="answer-label" for="answer">Your answer</label><div class="answer-row"><input id="answer" name="answer" type="text" inputmode="text" autocomplete="off" spellcheck="false" maxlength="80" required><button class="primary" id="check-answer" type="submit">Check →</button></div><p class="fine">Type a number, decimal or fraction, such as 1/2. Press Enter to check.</p></form>
+    <p id="math-feedback" role="status"></p>
+    <div class="math-actions"><button id="show-hint">A hint</button><button id="work-through">Work it through</button><button id="close-math">Return to scene</button></div>
+    <button id="unlock" class="primary full" hidden>Open the way →</button>
+  </dialog>
+  <dialog id="pause-dialog" aria-labelledby="pause-title"><p class="eyebrow">TAKE YOUR TIME</p><h2 id="pause-title">The Tower can wait.</h2><p class="dialog-copy">Your expedition and checked calculations are saved.</p><button id="unpause" class="primary">Continue →</button><button id="pause-home" class="secondary">Return to journal</button></dialog>
+  <dialog id="result-dialog" aria-labelledby="result-title"><p class="eyebrow">CORRESPONDENCE RECORDED</p><h2 id="result-title"></h2><p id="result-copy" class="dialog-copy"></p><p id="result-math" class="fine"></p><button id="next-stage" class="primary"></button><button id="result-home" class="secondary">Return to journal</button></dialog>
+  <dialog id="restart-dialog" aria-labelledby="restart-title"><p class="eyebrow">NEW EXPEDITION</p><h2 id="restart-title">Start a new path?</h2><p class="dialog-copy">This replaces the current expedition in this browser. Your selected math bank will be used from the first door.</p><button id="confirm-new" class="primary">Start new expedition →</button><button id="cancel-new" class="secondary">Keep current progress</button></dialog>
+  <dialog id="encounter-dialog" aria-labelledby="encounter-title"><p class="eyebrow">FIELD NOTES</p><h2 id="encounter-title"></h2><p id="encounter-copy" class="dialog-copy"></p><div id="encounter-choices"></div></dialog>
+  <noscript>This adventure needs JavaScript enabled in your browser.</noscript>
+</body>
+</html>

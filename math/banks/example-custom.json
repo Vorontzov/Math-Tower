@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "title": "Teacher's first practice set",
+  "items": [
+    {
+      "id": "fraction-reserve",
+      "topic": "subtract",
+      "prompt": "A full battery loses 3/8 of its charge. What fraction remains?",
+      "answer": "5/8",
+      "hint": "One whole is eight eighths. Subtract the used parts.",
+      "steps": [
+        { "prompt": "There are 8 equal parts and 3 are used. How many parts remain?", "answer": "5" },
+        { "prompt": "Write the remaining fraction of the original battery.", "answer": "5/8" }
+      ]
+    },
+    {
+      "id": "relay-equation",
+      "topic": "missing",
+      "prompt": "Solve 3x + 4 = 19. Type the value of x.",
+      "answer": "5",
+      "hint": "Undo addition first, then multiplication.",
+      "steps": [
+        { "prompt": "Subtract 4 from both sides. What is 19 minus 4?", "answer": "15" },
+        { "prompt": "Divide that result by 3. What is x?", "answer": "5" }
+      ]
+    }
+  ]
+}
