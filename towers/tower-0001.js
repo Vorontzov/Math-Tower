@@ -1,3 +1,32 @@
+// Selected scenes for the Midnight Museum animation / interaction proof.
+// This compresses the descent between roof and gallery; it is not a second Tower.
+export const midnightOpening = {
+  title: 'The Midnight Museum',
+  gates: [
+    { id: 'midnight-roof-v1', label: 'Roof access relay', socket: { topic: 'two-step' } },
+    { id: 'midnight-gallery-v1', label: 'Gallery alignment', socket: { topic: 'difference' } },
+  ],
+  films: {
+    arrival: [
+      { seconds: 7, camera: [30, 23, 34], end: [18, 13, 23], target: [-3, 1, -1], speaker: 'CAMPUS SECURITY', line: 'Math Tower, do you copy? We have lost contact with your lower research levels.', action: 'landing' },
+      { seconds: 6, camera: [-11, 4, 10], end: [-10, 3, 8], target: [-6, 1.4, 3], speaker: 'PILOT', line: 'That is our last safe landing. The roof door should get you inside.', action: 'arrival' },
+      { seconds: 6, camera: [15, 6, 4], end: [13, 5, 3], target: [7, 2, -7], speaker: 'DISTANT RADIO', line: 'If anyone can hear this… do not let it—', action: 'door' },
+    ],
+    welcome: [
+      { seconds: 6, camera: [14, 10, 18], end: [8, 6, 14], target: [0, 3, -2], speaker: '', line: '', action: 'reveal' },
+      { seconds: 6, camera: [-1, 2.5, 6], end: [-1.5, 2.3, 5.5], target: [-4, 1.1, 2], speaker: 'MUSEUM GUIDEBOT', line: 'Welcome to Math Tower. Please proceed to the nearest… nearest safe reality.', action: 'greeting' },
+      { seconds: 5, camera: [4, 2.6, 4], end: [3, 2.2, 3], target: [4, .6, -3], speaker: 'MUSEUM GUIDEBOT', line: 'Please do not touch the exhibits.', action: 'skitters' },
+    ],
+    alignment: [
+      { seconds: 4, camera: [6, 5, 8], end: [5, 4, 6], target: [0, 3, -1], speaker: '', line: '', action: 'align' },
+      { seconds: 4, camera: [12, 4, -3], end: [11, 3, -4], target: [9, 2, -10], speaker: 'THE EXPLORER', line: 'That room cannot fit inside this building.', action: 'open' },
+    ],
+    ending: [
+      { seconds: 6, camera: [12, 5, 1], end: [7, 4, -3], target: [9, 2, -11], speaker: 'DISTANT RADIO', line: 'If you are above twelve, do not come down. Actually… forget that. Get out.', action: 'ending' },
+    ],
+  },
+};
+
 // One file owns this Tower's story, geometry, transport, encounters and math sockets.
 export default {
   id: 'tower-0001', kind: 'tower', engine: 'tower', title: 'The Night Everything Went Wrong',

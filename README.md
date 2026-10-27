@@ -4,6 +4,8 @@ A modular browser adventure based on **Math Tower Evolution**. Explore a univers
 
 **Current release: Tower 1 only — The Night Everything Went Wrong.** There are no implemented Interludes or additional Towers. The full campaign target is **1,000 Towers plus 999 math-supported Interlude games**, totaling 1,999 adventures. Future levels will be implemented from their completed scripts when requested.
 
+**New selected direction: The Midnight Museum.** Play the [new 3D opening study](midnight/) for cinematic camera sequences, an animated helicopter arrival, a playable rooftop, a museum encounter, collectible fragments and two typed math mechanisms. This is the first animation/interaction proof for the rebuild, **not the full Tower 1 in the new style**. The original complete Tower remains at the root. See [what the new opening includes](docs/MIDNIGHT-OPENING.md).
+
 ## Play Tower 1
 
 Start on Floor 18, descend through the museum and research areas to B3, restore the campus override, and return to the Floor 1 lobby to escape. The current playable adaptation includes:
@@ -102,6 +104,7 @@ Optional browser checks need Python, Playwright and Chromium:
 python -m pip install -r requirements-dev.txt
 python -m playwright install chromium
 python tests/browser.py
+python tests/midnight_browser.py
 ```
 
 `CHROMIUM_PATH` can select a browser; otherwise the test uses system Chromium when available or Playwright's installed browser. The test manages its own HTTP server. It checks a `/Math-Tower/` deployment prefix, keyboard and touch, paused maths and harmless errors, checked-step persistence, the final escape from a saved checkpoint, teacher-bank import, fraction equivalence, mobile layout, blocked storage and local-only runtime requests. The Node test covers the complete traversal; the browser test uses checkpoint fixtures for the late-game escape.

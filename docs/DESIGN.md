@@ -4,6 +4,8 @@ The design basis is the user's two **Math Tower Evolution** documents, followed 
 
 ## Current delivery
 
+The user has now selected **The Midnight Museum**, a new 3D animated-feature direction. `midnight/` provides a separate playable opening proof while the complete first Tower awaits its visual and cinematic rebuild. Its scene and math definitions remain in `towers/tower-0001.js`; no second adventure is registered. See [the opening scope](MIDNIGHT-OPENING.md). The description below documents the original complete Tower implementation, retained for comparison.
+
 One playable Tower definition, one shared Tower engine, shared browser systems, replaceable numeric math banks, sequential checked help, local saves and static hosting support. There are no later Tower definitions and no implemented Interlude engines or stages.
 
 The stage sequence reserves Tower 1 → Interlude 1 → Tower 2 → … → Interlude 999 → Tower 1000. Reserving IDs does not make those adventures playable.
