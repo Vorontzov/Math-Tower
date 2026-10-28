@@ -1,6 +1,6 @@
 # Math Tower — a new visual identity
 
-**Selected by the user: C — The Midnight Museum.** The repository includes the [selected visual target](concepts/midnight-museum-target.png), [ten-panel storyboard](concepts/tower-1-storyboard.png), and [100-direction catalog](visual-directions.tsv). The separate offline visual-study gallery contains all six rendered finalists. See [the playable opening scope](MIDNIGHT-OPENING.md) for what has actually been implemented.
+**Historical selection: C — The Midnight Museum. The latest user direction supersedes its playful style with a serious, grounded mystery; see [the current implementation](TOWER-1-3D.md).** The repository includes the [selected visual target](concepts/midnight-museum-target.png), [ten-panel storyboard](concepts/tower-1-storyboard.png), and [100-direction catalog](visual-directions.tsv). The separate offline visual-study gallery contains all six rendered finalists. See [the playable opening scope](MIDNIGHT-OPENING.md) for what has actually been implemented.
 
 This study responds to the user's rejection of the current implementation and their clarification: **cinematic story scenes plus playable arcade action**. The current game's visual layout is not a starting point for the redesign.
 

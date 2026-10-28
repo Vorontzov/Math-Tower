@@ -4,7 +4,7 @@ The design basis is the user's two **Math Tower Evolution** documents, followed 
 
 ## Current delivery
 
-The user has now selected **The Midnight Museum**, a new 3D animated-feature direction. `midnight/` provides a separate playable opening proof while the complete first Tower awaits its visual and cinematic rebuild. Its scene and math definitions remain in `towers/tower-0001.js`; no second adventure is registered. See [the opening scope](MIDNIGHT-OPENING.md). The description below documents the original complete Tower implementation, retained for comparison.
+The complete first Tower now runs in 3D at `midnight/`. The user's latest direction supersedes the playful animated-feature look: a serious, grounded research-institute mystery with a rebuilt introduction, human-scale characters, worn materials and restrained lighting. All 21 floors, the nine required and three optional mathematics systems, story scenes, choices, transport and return-to-lobby escape are implemented. See [the current 3D scope](TOWER-1-3D.md). The earlier 2D adaptation remains available at the root.
 
 One playable Tower definition, one shared Tower engine, shared browser systems, replaceable numeric math banks, sequential checked help, local saves and static hosting support. There are no later Tower definitions and no implemented Interlude engines or stages.
 

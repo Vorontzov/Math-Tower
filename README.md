@@ -4,9 +4,11 @@ A modular browser adventure based on **Math Tower Evolution**. Explore a univers
 
 **Current release: Tower 1 only — The Night Everything Went Wrong.** There are no implemented Interludes or additional Towers. The full campaign target is **1,000 Towers plus 999 math-supported Interlude games**, totaling 1,999 adventures. Future levels will be implemented from their completed scripts when requested.
 
-**New selected direction: The Midnight Museum.** Play the [new 3D opening study](midnight/) for cinematic camera sequences, an animated helicopter arrival, a playable rooftop, a museum encounter, collectible fragments and two typed math mechanisms. This is the first animation/interaction proof for the rebuild, **not the full Tower 1 in the new style**. The original complete Tower remains at the root. See [what the new opening includes](docs/MIDNIGHT-OPENING.md).
+**Play the complete 3D Tower:** [The First Correspondence](midnight/). The rooftop opening now continues through all 21 floors to the basement breach and the escape back to campus. The latest art direction is a serious research-institute mystery, with human-scale animated characters, weathered materials, dramatic lighting and a rewritten introduction. See [the full 3D feature and scope guide](docs/TOWER-1-3D.md). The earlier 2D adaptation remains at the repository root for comparison.
 
-## Play Tower 1
+In the 3D version, **WASD/arrows move, Space jumps, X sends a stun pulse, C shoves and E interacts** with nearby stairs, lifts, instruments and people. P/Escape pauses. Touch controls provide the same actions. Mathematics pauses the scene; each step of worked help still requires a checked input.
+
+## Earlier 2D adaptation
 
 Start on Floor 18, descend through the museum and research areas to B3, restore the campus override, and return to the Floor 1 lobby to escape. The current playable adaptation includes:
 
@@ -20,7 +22,7 @@ Start on Floor 18, descend through the museum and research areas to B3, restore 
 
 Q.E.D. is mentioned in the museum material and is **not** recruited in Tower 1. Campus Sprint is deferred along with all later adventures. The first release uses procedural canvas art, text dialogue and synthesized effects; it does not reproduce every proposed cinematic or optional exhibit from the design document.
 
-## Controls
+## Earlier 2D controls
 
 | Control | Action |
 | --- | --- |
@@ -96,7 +98,7 @@ npm test
 npm run check
 ```
 
-The 11 Node tests cover the full reserved sequence, Tower 1 reachability, prerequisite cycles, 10,000 seeded questions checked against independent arithmetic, guided-step progression and reloads, custom banks, invalid saves, transport, optional choices, and a complete roof-to-basement-to-lobby traversal through the actual simulation controls.
+The Node tests cover the full reserved sequence, Tower 1 reachability, prerequisite cycles, 10,000 seeded questions checked against independent arithmetic, guided-step progression and reloads, custom banks, invalid saves, transport, optional choices, and a complete roof-to-basement-to-lobby traversal through the actual simulation controls.
 
 Optional browser checks need Python, Playwright and Chromium:
 
@@ -108,5 +110,7 @@ python tests/midnight_browser.py
 ```
 
 `CHROMIUM_PATH` can select a browser; otherwise the test uses system Chromium when available or Playwright's installed browser. The test manages its own HTTP server. It checks a `/Math-Tower/` deployment prefix, keyboard and touch, paused maths and harmless errors, checked-step persistence, the final escape from a saved checkpoint, teacher-bank import, fraction equivalence, mobile layout, blocked storage and local-only runtime requests. The Node test covers the complete traversal; the browser test uses checkpoint fixtures for the late-game escape.
+
+The additional 3D tests cover the full 21-floor progression, room accessibility, transport/story gates, all rendered rooms, optional choices and the return-to-lobby escape.
 
 See [the authoring contract](docs/AUTHORING.md) and [scope decisions](docs/DESIGN.md) before adding content.

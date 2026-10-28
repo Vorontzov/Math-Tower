@@ -2,7 +2,13 @@
 
 **Only Tower 1 is authorized for implementation now.** This contract describes extension points for later work; it is not an instruction to create more content.
 
-## One file per adventure
+## Full 3D Tower
+
+The `midnightTower` named export in `towers/tower-0001.js` owns the 21 room definitions, scenes, lifted math sockets, objects and transport. Its coordinates are local metres, not the earlier 2D canvas coordinates. `engines/midnight/rooms.js` builds and disposes one active room at a time; `state.js` validates saves, travel and completion; the browser coordinator handles films and learning UI. Keep all mandatory mathematical checks in shared state rules, not just visual button availability.
+
+The latest visual direction is grounded and dramatic. Runtime assets remain local; preserve the attribution and terms in `assets/realism/CREDITS.md`. The full save namespace is `mathTower.midnight.tower1.v2`. The older proof and 2D save formats remain separate.
+
+## Earlier 2D definition: one file per adventure
 
 A Tower definition exports an object from `towers/tower-NNNN.js`. Interludes will use `interludes/interlude-NNNN.js`. A file owns its ID, title, brief, ending, geometry, transport, objects, encounters and math sockets. Shared simulation/rendering stays in `engines/`; loading, state and UI stay in `core/`.
 

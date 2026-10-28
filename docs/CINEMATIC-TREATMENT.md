@@ -2,6 +2,8 @@
 
 [View the ten-panel concept storyboard](concepts/tower-1-storyboard.png). Its panels summarize the major beats; the treatment below specifies thirteen scenes.
 
+**Implementation update:** The full Tower now stages these principal beats in 3D, with a rewritten serious introduction and shorter scene timings. See [the current implementation](TOWER-1-3D.md). The detailed treatment below records the earlier proposed cut.
+
 **Confirmed format:** cinematic story scenes plus playable arcade action. The game does not become an interactive movie made mainly of choices. The story is visibly acted, while movement, exploration, combat and mathematical work remain playable.
 
 This is a proposed film treatment of the completed first-Tower script. It is a written treatment and storyboard, not a finished animated film. New lines below are suggested adaptations where needed to connect shots. The protagonist's identity and voice casting remain open. The Guidebot seen early is not Q.E.D.; Q.E.D.'s introduction remains later in the campaign.
