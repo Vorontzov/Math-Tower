@@ -10,7 +10,15 @@
     <title>Math Tower — The First Correspondence</title>
     <link rel="icon" href="../assets/tower.svg" />
     <link rel="stylesheet" href="./style.css" />
-    <script type="module" src="../engines/midnight/game.js"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "../engines/midnight/actors.js": "../engines/midnight/actors.js?v=0.3.1",
+          "../towers/tower-0001.js": "../towers/tower-0001.js?v=0.3.1"
+        }
+      }
+    </script>
+    <script type="module" src="../engines/midnight/game.js?v=0.3.1"></script>
   </head>
   <body>
     <canvas

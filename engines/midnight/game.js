@@ -3,6 +3,8 @@ import { createWorld } from "./world.js";
 import { buildRoom, buildCampus } from "./rooms.js";
 import {
   animateExplorer,
+  animateSkitter,
+  faceMovement,
   explorer,
   box,
   mat,
@@ -404,7 +406,8 @@ function start() {
       features.robot.userData.arms[0].rotation.z = Math.sin(time * 8);
       room.enemies.forEach((e, i) => {
         e.position.z = -3 + Math.sin(time + i) * 0.3;
-        e.position.y = Math.abs(Math.sin(time * 2 + i)) * 0.5;
+        e.position.y = 0;
+        if (e.userData.kind === "skitter") animateSkitter(e, time, 1);
       });
     }
     if (shot.action === "expand" && features.expansion)
@@ -450,9 +453,10 @@ function start() {
       features.alternate.rotation.y = time * 0.8;
     }
     if (shot.action === "swarm")
-      room.enemies.forEach((e, i) =>
-        e.position.set(-3 + i * 1.1, 0.15, -4 + f * 4),
-      );
+      room.enemies.forEach((e, i) => {
+        e.position.set(-3 + i * 2.2, 0, -4 + f * 4);
+        if (e.userData.kind === "skitter") animateSkitter(e, time, 1.5);
+      });
     if (shot.action === "tower" && campus) {
       const height = f < 0.28 ? 18 : f < 0.52 ? 19 : f < 0.76 ? 22 : 18;
       campus.tower.children.forEach(
@@ -735,6 +739,7 @@ function start() {
       world.camera.lookAt(p.x, 1.5, p.z);
       ride.car.children[1].position.y = 1.6 + Math.sin(f * 10) * 0.08;
     } else {
+      faceMovement(world.player, 0, -1);
       animateExplorer(world.player, time, 1);
       world.player.position.z = p.z - f * 0.6;
       world.player.position.y = Math.sin(f * Math.PI) * 0.35;
@@ -1053,20 +1058,22 @@ function start() {
     }
     const dx = (x * 0.825 + z * 0.565) * 5.3 * dt,
       dz = (-x * 0.565 + z * 0.825) * 5.3 * dt;
+    const beforeX = p.x,
+      beforeZ = p.z;
     if (!blocked(p.x + dx, p.z, p.y)) p.x += dx;
     if (!blocked(p.x, p.z + dz, p.y)) p.z += dz;
-    if (len) {
-      const angle = Math.atan2(dx, dz),
-        delta = Math.atan2(
-          Math.sin(angle - world.player.rotation.y),
-          Math.cos(angle - world.player.rotation.y),
-        );
-      world.player.rotation.y += delta * Math.min(1, dt * 13);
-    }
+    const movedX = p.x - beforeX,
+      movedZ = p.z - beforeZ;
+    faceMovement(world.player, movedX, movedZ);
     vy -= 18 * dt;
     p.y = Math.max(0, p.y + vy * dt);
     if (p.y === 0) vy = 0;
-    animateExplorer(world.player, time, len ? 1 : 0, p.y);
+    animateExplorer(
+      world.player,
+      time,
+      dt ? Math.hypot(movedX, movedZ) / (dt * 5.3) : 0,
+      p.y,
+    );
     world.player.visible = true;
     room.collectibles.forEach(({ group, id }) => {
       if (
@@ -1090,7 +1097,8 @@ function start() {
       if (s.disabled) return;
       s.stun = Math.max(0, s.stun - dt);
       if (s.stun) {
-        e.rotation.z = Math.sin(time * 8) * 0.1;
+        e.rotation.z = Math.sin(time * 8) * 0.035;
+        if (s.kind === "skitter") animateSkitter(e, time, 0, false, true);
         return;
       }
       e.rotation.z = 0;
@@ -1109,18 +1117,14 @@ function start() {
         if (!blocked(nx, e.position.z, 0)) e.position.x = nx;
         if (!blocked(e.position.x, nz, 0)) e.position.z = nz;
       }
-      e.position.y = windup
-        ? 0.05 + Math.sin(time * 20) * 0.03
-        : Math.abs(Math.sin(time * 9 + i)) * 0.05;
-      e.scale.setScalar(windup ? 1.12 : 1);
-      s.legs?.forEach(
-        (l, j) => (l.rotation.y = Math.sin(time * (charge ? 18 : 8) + j) * 0.3),
-      );
+      e.position.y = 0;
+      if (s.kind === "skitter")
+        animateSkitter(e, time, distance < 11 ? speed : 0, windup);
       if (s.kind === "guidebot")
         e.userData.arms.forEach(
           (a, j) => (a.rotation.z = Math.sin(time * 3 + j) * 0.3),
         );
-      if (distance < 0.9 && p.y < 0.7) hurt();
+      if (distance < (s.contactRadius || 0.9) && p.y < 0.7) hurt();
     });
     room.features.steam?.forEach((s) => {
       if (
@@ -1134,10 +1138,12 @@ function start() {
       const target = p.clone().add(new T.Vector3(-1.3, 0, 1.2)),
         distance = companion.position.distanceTo(target);
       if (distance > 1) {
+        const before = companion.position.clone();
         companion.position.lerp(target, Math.min(1, dt * 2));
-        companion.rotation.y = Math.atan2(
-          p.x - companion.position.x,
-          p.z - companion.position.z,
+        faceMovement(
+          companion,
+          companion.position.x - before.x,
+          companion.position.z - before.z,
         );
       }
       animateExplorer(companion, time, distance > 1 ? 1 : 0);

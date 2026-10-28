@@ -34,11 +34,13 @@ There are **nine required mathematics systems and three optional caches**. The f
 
 Public Lift A serves 18–10. Research Lift B serves its authored stops after Floor 12 power restoration. Freight Lift C serves 8, 4, 1 and B2 after allocation on Floor 4. Stairs connect every adjacent floor, including B2↔B3; escalators and the 8→6 maintenance shaft provide additional routes. Lifts cannot skip unrestored mathematics or unvisited key story events on the first descent. Backtracking and the escape use already restored routes.
 
+The explorer is a civilian in a sweater and trousers, with an uncovered face. The older researcher has a separate face and jacket. Both use native skeletal idle/run/walk motion. Assets are normalized to face local +Z; player and companion orientation follows their actual movement, including sliding along obstacles. The introduction includes a closer face shot.
+
 ## Action and choices
 
 WASD/arrows move relative to the camera. Space jumps. X sends a radial stun pulse; C shoves at close range. E uses nearby instruments, doors, stairs, lifts, records and characters. P/Escape pauses. Touch buttons provide the same actions.
 
-Skitters approach, visibly prepare, then rush. Damaged Guidebots appear in later rooms. Steam hazards cycle in machinery rooms. Losing all three hearts restores the player at the current stairs while preserving mathematics, fragments and choices.
+Skitters are large hunting spiders with eight articulated legs, two body segments, small reflective eyes and a coordinated gait. They lower their bodies and raise their forelegs before rushing; they have no exposed fangs or graphic details. Their span is roughly 3.6 metres, with forgiving body-based contact detection. Damaged Guidebots appear in later rooms. Steam hazards cycle in machinery rooms. Losing all three hearts restores the player at the current stairs while preserving mathematics, fragments and choices.
 
 Freeing the archive Guidebot increases pulse range. The emergency supplies restore health. The optional battery protects the opening seconds of each escape floor. The researcher follows if invited and can pull the player clear of an escape attack, with a cooldown. Freight enables an escape shortcut from B2 to the lobby; ventilation clears lower patrols before the breach. Power choices replace one another rather than stacking beyond the budget.
 
@@ -55,3 +57,5 @@ Mathematics freezes the simulation and costs no health on mistakes. Answers are 
 The complete 3D save key is `mathTower.midnight.tower1.v2`. Opening-study and 2D saves remain stored independently; checked work is not silently transferred to different questions. The current-floor position, mathematical progress, choices, fragments and pending cinematic are saved. If browser storage is blocked, play remains available for the session.
 
 Run `npm test`, `npm run check`, `python tests/browser.py`, and `python tests/midnight_browser.py`. Node tests traverse every progression state, exercise the transport and learning gates, and pathfind all rendered rooms to verify access to targets. Browser checks render all 21 rooms and exercise keyboard/touch input, saved help, choices, interrupted scenes, the final override, escape stairs, freight travel and campus completion using saved checkpoint fixtures. They are not a claim of testing every route on physical mobile hardware.
+
+Character changes additionally run `python tests/actors_browser.py`. It checks the actual animated face direction against displacement from all eight keyboard directions and verifies that the civilian assets load, with a capture of the introduction's face shot. The Node actor tests exercise every shipped idle/walk/run clip, anatomical scale, relaxed arms and articulated spider legs.

@@ -512,12 +512,12 @@ export const midnightTower = {
       ),
       shot(
         6,
-        [-8, 2.8, 8],
-        [-6, 1.8, 3],
+        [-4.5, 1.95, 6.2],
+        [-6, 1.73, 4],
         "CAMPUS SECURITY",
         "We have received the same message for forty-three minutes. No name. No response.",
         "arrival",
-        [-8, 2.4, 6],
+        [-4.7, 1.9, 6],
       ),
       shot(
         6,

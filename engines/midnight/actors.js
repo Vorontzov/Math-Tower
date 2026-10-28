@@ -5,12 +5,19 @@ import { groundedMaterial } from "./realism.js";
 import { RoundedBoxGeometry } from "../../vendor/addons/geometries/RoundedBoxGeometry.js";
 
 export const mat = groundedMaterial;
-let humanAsset = null;
+const humanAssets = {};
 export async function loadHumanAsset() {
-  humanAsset = await new GLTFLoader().loadAsync(
-    new URL("../../assets/realism/operative.glb", import.meta.url).href,
+  const loader = new GLTFLoader();
+  const assets = await Promise.all(
+    ["explorer", "researcher"].map((name) =>
+      loader.loadAsync(
+        new URL(`../../assets/realism/${name}.glb`, import.meta.url).href,
+      ),
+    ),
   );
+  [humanAssets.explorer, humanAssets.researcher] = assets;
 }
+
 export function mesh(
   parent,
   geometry,
@@ -109,7 +116,7 @@ export function explorer() {
     legs.push(leg);
   }
   root.userData = { body, head, arms, legs, eyes, mouth };
-  if (humanAsset) animateExplorer(root, 0);
+  if (humanAssets.explorer) animateExplorer(root, 0);
   return root;
 }
 export function animateExplorer(
@@ -119,6 +126,7 @@ export function animateExplorer(
   jump = 0,
   talking = false,
 ) {
+  const humanAsset = humanAssets[root.userData.role || "explorer"];
   if (humanAsset && !root.userData.human) {
     const model = cloneSkeleton(humanAsset.scene);
     model.traverse((o) => {
@@ -135,9 +143,8 @@ export function animateExplorer(
         }
       }
     });
-    // This authored asset is 1.83 m tall. A fixed physical scale avoids measuring
-    // uninitialized cloned skin matrices before the first renderer update.
-    model.scale.multiplyScalar(1.15);
+    // Exported at 2.05 m, with the face and toes pointing along local +Z.
+    // Keep that basis identical for idle, locomotion, companions and scenes.
     model.updateMatrixWorld(true);
     model.traverse((o) => {
       if (o.isSkinnedMesh) {
@@ -160,10 +167,10 @@ export function animateExplorer(
       current: "Idle",
       last: time,
     };
-    const headBone = model.getObjectByName("mixamorigHead");
+    const headBone = model.getObjectByName("Bip01_Head");
     if (headBone) root.userData.head = headBone;
-    const leftArm = model.getObjectByName("mixamorigLeftArm"),
-      rightArm = model.getObjectByName("mixamorigRightArm");
+    const leftArm = model.getObjectByName("Bip01_L_UpperArm"),
+      rightArm = model.getObjectByName("Bip01_R_UpperArm");
     if (leftArm && rightArm) root.userData.arms = [leftArm, rightArm];
   }
   const human = root.userData.human;
@@ -174,6 +181,8 @@ export function animateExplorer(
       human.actions[desired]?.reset().fadeIn(0.18).play();
       human.current = desired;
     }
+    if (human.actions.Run)
+      human.actions.Run.timeScale = 1.25 * Math.max(0.65, speed);
     human.mixer.update(Math.min(0.06, Math.max(0, time - human.last)));
     human.last = time;
     human.model.rotation.x = jump > 0.1 ? -0.12 : 0;
@@ -197,14 +206,25 @@ export function animateExplorer(
 }
 
 export function setActorRole(root, role) {
-  const human = root.userData.human;
-  if (!human) return;
-  human.model.traverse((o) => {
-    if (o.isMesh && !o.material.name.includes("Visor")) {
-      o.material.color.set(role === "researcher" ? "#b7b9ad" : "#576067");
-      o.material.roughness = 0.85;
-    }
-  });
+  if (!humanAssets[role] || root.userData.role === role) return;
+  const old = root.userData.human;
+  if (old) {
+    old.mixer.stopAllAction();
+    root.remove(old.model);
+    old.model.traverse((o) => {
+      if (o.isSkinnedMesh) o.skeleton.dispose();
+      o.geometry?.dispose();
+      o.material?.dispose();
+    });
+  }
+  root.userData.human = null;
+  root.userData.role = role;
+  animateExplorer(root, 0);
+}
+
+// Every animated human asset has the same +Z forward basis.
+export function faceMovement(actor, dx, dz) {
+  if (Math.hypot(dx, dz) > 1e-8) actor.rotation.y = Math.atan2(dx, dz);
 }
 
 export function guidebot() {
@@ -266,30 +286,170 @@ export function guidebot() {
   g.userData = { head, arms };
   return g;
 }
+// Eight articulated legs, two body segments and small reflective eyes.
+// Geometry is built at its actual size; attacks never inflate the creature.
 export function skitter() {
-  const g = new T.Group(),
-    ink = mat("#172338", 0.3, 0.35),
-    cyan = new T.MeshStandardMaterial({
-      color: "#c2b49a",
-      emissive: "#8d6841",
-      emissiveIntensity: 0.8,
+  const root = new T.Group(),
+    body = new T.Group();
+  root.add(body);
+  const shell = mat("#514438", 0.82, 0.03),
+    joint = mat("#352e28", 0.76),
+    marking = mat("#786751", 0.88),
+    eye = new T.MeshPhysicalMaterial({
+      color: "#171b19",
+      roughness: 0.12,
+      clearcoat: 1,
     });
-  ball(g, ink, [0, 0.37, 0], [0.43, 0.27, 0.49]);
-  ball(g, ink, [0, 0.5, 0.34], [0.3, 0.25, 0.3]);
-  for (const x of [-0.13, 0.13])
-    ball(g, cyan, [x, 0.55, 0.6], [0.025, 0.03, 0.02]);
+  const abdomen = ball(body, shell, [0, 0.68, -0.5], [0.56, 0.44, 0.78]);
+  abdomen.rotation.x = -0.12;
+  ball(body, joint, [0, 0.58, 0.12], [0.24, 0.23, 0.28]);
+  ball(body, shell, [0, 0.6, 0.48], [0.43, 0.3, 0.49]);
+  // Subtle dorsal markings, without exposed mouth parts or gore.
+  for (let i = 0; i < 4; i++) {
+    const m = ball(
+      body,
+      marking,
+      [0, 1.065 - i * 0.018, -0.28 - i * 0.17],
+      [0.22 - i * 0.024, 0.012, 0.055],
+    );
+    m.rotation.x = -0.12;
+  }
+  for (const side of [-1, 1]) {
+    ball(body, eye, [side * 0.12, 0.79, 0.915], [0.04, 0.035, 0.027]);
+    for (const x of [0.065, 0.21])
+      ball(body, eye, [side * x, 0.675, 0.926], [0.022, 0.021, 0.017]);
+    ball(body, eye, [side * 0.305, 0.78, 0.75], [0.025, 0.022, 0.02]);
+    const palp = ball(
+      body,
+      joint,
+      [side * 0.18, 0.43, 0.93],
+      [0.07, 0.06, 0.17],
+    );
+    palp.rotation.y = side * 0.2;
+  }
+  const hairs = [];
+  for (let i = 0; i < 140; i++) {
+    const angle = i * 2.39996,
+      v = (i + 0.5) / 140,
+      normal = new T.Vector3(
+        Math.cos(angle) * Math.sqrt(1 - v * v),
+        v,
+        Math.sin(angle) * Math.sqrt(1 - v * v),
+      ),
+      start = new T.Vector3(
+        normal.x * 0.565,
+        0.68 + normal.y * 0.445,
+        -0.5 + normal.z * 0.78,
+      ),
+      end = start.clone().addScaledVector(normal, 0.025 + (i % 5) * 0.004);
+    hairs.push(...start.toArray(), ...end.toArray());
+  }
+  const hairGeo = new T.BufferGeometry();
+  hairGeo.setAttribute("position", new T.Float32BufferAttribute(hairs, 3));
+  body.add(
+    new T.LineSegments(
+      hairGeo,
+      new T.LineBasicMaterial({
+        color: "#8b7860",
+        transparent: true,
+        opacity: 0.38,
+      }),
+    ),
+  );
   const legs = [];
-  for (const s of [-1, 1])
-    for (let i = 0; i < 3; i++) {
-      const leg = new T.Group();
-      leg.position.set(s * 0.23, 0.28, (i - 1) * 0.28);
-      g.add(leg);
-      rod(leg, ink, [0, 0, 0], [s * 0.42, 0.2, -0.1], 0.055);
-      rod(leg, ink, [s * 0.42, 0.2, -0.1], [s * 0.62, -0.23, 0.1], 0.045);
-      legs.push(leg);
+  for (const side of [-1, 1])
+    for (let i = 0; i < 4; i++) {
+      const hip = new T.Vector3(side * 0.32, 0.59, 0.72 - i * 0.27),
+        knee = new T.Vector3(
+          side * [0.91, 1.24, 1.28, 1.03][i],
+          [1.02, 1.1, 1.04, 0.92][i],
+          [1.12, 0.48, -0.44, -1.08][i],
+        ),
+        foot = new T.Vector3(
+          side * [1.4, 1.78, 1.8, 1.48][i],
+          0.045,
+          [1.6, 0.67, -0.68, -1.65][i],
+        );
+      const segments = [0.065, 0.045, 0.021].map((radius, j) =>
+        mesh(
+          root,
+          new T.CylinderGeometry(radius * 0.63, radius, 1, 10),
+          j === 0 ? shell : joint,
+        ),
+      );
+      const knuckle = ball(root, shell, knee.toArray(), [0.059, 0.059, 0.059]);
+      legs.push({
+        hip,
+        knee,
+        foot,
+        segments,
+        knuckle,
+        side,
+        index: i,
+        phase: ((i + (side > 0 ? 1 : 0)) % 2) * Math.PI,
+      });
     }
-  g.userData = { legs, phase: 0, stun: 0 };
-  return g;
+  root.userData = {
+    legs,
+    body,
+    phase: 0,
+    stun: 0,
+    gait: 0,
+    last: null,
+    contactRadius: 0.98,
+  };
+  animateSkitter(root, 0, 0);
+  return root;
+}
+const segmentUp = new T.Vector3(0, 1, 0);
+export function animateSkitter(
+  root,
+  time,
+  speed = 0,
+  windup = false,
+  stunned = false,
+) {
+  const data = root.userData;
+  if (!data.body || !data.legs?.length) return;
+  const dt =
+    data.last === null ? 0 : Math.max(0, Math.min(0.1, time - data.last));
+  data.last = time;
+  data.gait += dt * (speed > 0 ? 4 + speed * 1.9 : 0);
+  data.body.position.y = windup ? -0.12 : Math.sin(time * 1.8) * 0.012;
+  data.body.rotation.x = windup ? -0.12 : 0;
+  for (const leg of data.legs) {
+    const phase = data.gait + leg.phase,
+      lift = stunned ? 0 : speed > 0 ? Math.max(0, Math.sin(phase)) * 0.19 : 0,
+      stride = stunned ? 0 : speed > 0 ? Math.cos(phase) * 0.22 : 0,
+      foot = leg.foot.clone(),
+      knee = leg.knee.clone(),
+      hip = leg.hip.clone();
+    foot.y += lift;
+    foot.z += stride;
+    knee.z += stride * 0.45;
+    knee.y += lift * 0.3;
+    if (windup) {
+      hip.y -= 0.12;
+      knee.y -= 0.08;
+      if (leg.index === 0) {
+        foot.y += 0.38;
+        foot.z -= 0.18;
+      }
+    }
+    const ankle = knee.clone().lerp(foot, 0.76);
+    ankle.x += leg.side * 0.1;
+    const points = [hip, knee, ankle, foot];
+    leg.segments.forEach((m, i) => {
+      const direction = points[i + 1].clone().sub(points[i]);
+      m.position
+        .copy(points[i])
+        .add(points[i + 1])
+        .multiplyScalar(0.5);
+      m.scale.y = direction.length();
+      m.quaternion.setFromUnitVectors(segmentUp, direction.normalize());
+    });
+    leg.knuckle.position.copy(knee);
+  }
 }
 
 export function helicopter() {
