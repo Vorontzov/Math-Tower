@@ -2,7 +2,6 @@ import * as T from "../../vendor/three.module.js";
 import { RGBELoader } from "../../vendor/addons/loaders/RGBELoader.js";
 import { EffectComposer } from "../../vendor/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "../../vendor/addons/postprocessing/RenderPass.js";
-import { UnrealBloomPass } from "../../vendor/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "../../vendor/addons/postprocessing/OutputPass.js";
 import { ShaderPass } from "../../vendor/addons/postprocessing/ShaderPass.js";
 import { FXAAShader } from "../../vendor/addons/shaders/FXAAShader.js";
@@ -132,6 +131,10 @@ export async function groundLighting(world) {
   world.enter = (room) => {
     scene.background = backgroundColor;
     originalEnter(room);
+    scene.traverse((o) => {
+      if (o.isDirectionalLight)
+        o.intensity = o.castShadow ? (room === "roof" ? 2.6 : 1.8) : 0.65;
+    });
     if (room === "roof") {
       world.city.visible = false;
       scene.background = sky;
@@ -151,8 +154,8 @@ export async function groundLighting(world) {
     });
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new T.Vector2(800, 600), 0.14, 0.45, 1.7);
-  composer.addPass(bloom);
+  // Keep a single tone-map / antialias chain on every viewport. The optional
+  // HDR bloom chain produced black render tiles on some WebGL implementations.
   composer.addPass(new OutputPass());
   const antialias = new ShaderPass(FXAAShader);
   composer.addPass(antialias);
@@ -161,7 +164,6 @@ export async function groundLighting(world) {
     originalResize();
     const w = renderer.domElement.clientWidth,
       h = renderer.domElement.clientHeight;
-    bloom.enabled = w > 1100;
     composer.setSize(w, h);
     antialias.material.uniforms.resolution.value.set(
       1 / (w * renderer.getPixelRatio()),

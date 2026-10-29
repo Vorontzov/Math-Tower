@@ -9,13 +9,13 @@ const humanAssets = {};
 export async function loadHumanAsset() {
   const loader = new GLTFLoader();
   const assets = await Promise.all(
-    ["explorer", "researcher"].map((name) =>
+    ["explorer", "researcher", "mara"].map((name) =>
       loader.loadAsync(
         new URL(`../../assets/realism/${name}.glb`, import.meta.url).href,
       ),
     ),
   );
-  [humanAssets.explorer, humanAssets.researcher] = assets;
+  [humanAssets.explorer, humanAssets.researcher, humanAssets.mara] = assets;
 }
 
 export function mesh(
@@ -542,4 +542,157 @@ export function helicopter() {
   g.userData.tailRotor = tailRotor;
   g.userData.rotor = rotor;
   return g;
+}
+
+// Human anatomy remains intact; missing facial detail is deliberate shadow,
+// rather than a monster mask, enlarged limbs or glowing eyes.
+export function presence() {
+  const root = explorer();
+  root.name = "Unidentified figure";
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    const old = o.material;
+    o.material = old.clone();
+    o.material.color.set(old?.name === "FaceSkin" ? "#11161a" : "#293238");
+    o.material.roughness = 0.94;
+    o.material.metalness = 0;
+    o.material.userData.sharedMaps = true;
+    old?.dispose();
+  });
+  root.userData.kind = "presence";
+  root.userData.hitRadius = 0.44;
+  root.userData.state = "patrolling";
+  return root;
+}
+export function animatePresence(root, time, speed = 0) {
+  animateExplorer(root, time, speed);
+  const s = root.userData;
+  if (s.human) {
+    s.human.model.rotation.x =
+      s.stun > 0 ? 0.16 : s.state === "winding" ? -0.13 : 0;
+    if (s.stun > 0) s.head.rotation.z = 0.18;
+    if (s.state === "winding" || s.state === "rushing") {
+      poseArm(
+        root,
+        "R",
+        [-0.28, 1.42, s.state === "rushing" ? 0.8 : 0.3],
+        [-0.55, 1.25, 0.05],
+      );
+    }
+  }
+}
+
+// Analytic two-bone arm pose, applied after the native body animation.
+// Targets are in actor-local metres and work with any normalized human rig.
+function poseArm(root, side, handTarget, bendTarget) {
+  const model = root.userData.human?.model;
+  if (!model) return;
+  const upper = model.getObjectByName(`Bip01_${side}_UpperArm`),
+    fore = model.getObjectByName(`Bip01_${side}_Forearm`),
+    hand = model.getObjectByName(`Bip01_${side}_Hand`);
+  if (!upper || !fore || !hand) return;
+  root.updateMatrixWorld(true);
+  const a = upper.getWorldPosition(new T.Vector3()),
+    b = fore.getWorldPosition(new T.Vector3()),
+    c = hand.getWorldPosition(new T.Vector3());
+  const goal = root.localToWorld(new T.Vector3(...handTarget)),
+    bend = root.localToWorld(new T.Vector3(...bendTarget));
+  const l1 = a.distanceTo(b),
+    l2 = b.distanceTo(c),
+    dir = goal.clone().sub(a),
+    d = Math.max(0.01, Math.min(l1 + l2 - 0.005, dir.length()));
+  dir.normalize();
+  goal.copy(a).addScaledVector(dir, d);
+  const projection = (l1 * l1 - l2 * l2 + d * d) / (2 * d);
+  const normal = bend.sub(a).addScaledVector(dir, -bend.dot(dir)).normalize();
+  const elbow = a
+    .clone()
+    .addScaledVector(dir, projection)
+    .addScaledVector(
+      normal,
+      Math.sqrt(Math.max(0, l1 * l1 - projection * projection)),
+    );
+  function aim(bone, child, target) {
+    root.updateMatrixWorld(true);
+    const start = bone.getWorldPosition(new T.Vector3()),
+      current = child.getWorldPosition(new T.Vector3()).sub(start).normalize(),
+      desired = target.clone().sub(start).normalize();
+    const delta = new T.Quaternion().setFromUnitVectors(current, desired),
+      world = bone.getWorldQuaternion(new T.Quaternion());
+    const parent = bone.parent.getWorldQuaternion(new T.Quaternion()).invert();
+    bone.quaternion.copy(parent.multiply(delta.multiply(world)));
+    root.updateMatrixWorld(true);
+  }
+  aim(upper, fore, elbow);
+  aim(fore, hand, goal);
+}
+export function equipStunGun(root) {
+  const gun = new T.Group();
+  gun.name = "Stun pistol";
+  const polymer = mat("#20272a", 0.85),
+    yellow = mat("#b5a368", 0.7),
+    steel = mat("#676f70", 0.35, 0.6);
+  box(gun, polymer, [0, 0, 0.13], [0.13, 0.13, 0.32]);
+  box(gun, yellow, [0, 0.015, 0.13], [0.136, 0.075, 0.21]);
+  const grip = box(gun, polymer, [0, -0.13, 0.035], [0.1, 0.22, 0.12]);
+  grip.rotation.x = -0.23;
+  box(gun, steel, [0, 0.045, 0.31], [0.1, 0.07, 0.045]);
+  for (const x of [-0.033, 0.033])
+    rod(gun, steel, [x, 0.02, 0.31], [x, 0.02, 0.35], 0.009);
+  box(gun, polymer, [0, -0.09, 0.16], [0.08, 0.025, 0.16]);
+  box(gun, polymer, [0, -0.055, 0.22], [0.07, 0.09, 0.02]);
+  const muzzle = new T.Object3D();
+  muzzle.position.set(0, 0.02, 0.36);
+  gun.add(muzzle);
+  const flash = ball(
+    gun,
+    new T.MeshBasicMaterial({
+      color: "#d5eeff",
+      transparent: true,
+      opacity: 0,
+    }),
+    [0, 0.02, 0.36],
+    [0.07, 0.06, 0.13],
+  );
+  root.add(gun);
+  root.userData.weapon = { gun, muzzle, flash };
+  return gun;
+}
+export function poseCombat(root, time) {
+  const weapon = root.userData.weapon;
+  if (!weapon) return;
+  const shove = Math.max(
+    0,
+    1 - (time - (root.userData.shoveStart ?? -100)) / 0.42,
+  );
+  const recoil = Math.max(
+    0,
+    1 - (time - (root.userData.fireStart ?? -100)) / 0.2,
+  );
+  const human = root.userData.human;
+  if (human) {
+    // Keep the pistol visible in a low-ready stance; raise to shoulder level
+    // while aiming or shooting. Both hands visibly reach towards the target.
+    const ready = root.userData.aiming || recoil > 0;
+    poseArm(
+      root,
+      "R",
+      [-0.27, ready ? 1.43 : 1.12, (ready ? 0.68 : 0.42) - recoil * 0.07],
+      [-0.52, 1.12, 0.1],
+    );
+    if (ready) poseArm(root, "L", [-0.17, 1.37, 0.58], [0.35, 1.1, 0.1]);
+    if (shove > 0) {
+      const extend = Math.sin((1 - shove) * Math.PI);
+      poseArm(root, "L", [0.16, 1.34, 0.3 + extend * 0.62], [0.45, 1.15, 0.2]);
+    }
+    const hand = human.model.getObjectByName("Bip01_R_Hand");
+    if (hand) {
+      root.updateMatrixWorld(true);
+      weapon.gun.position.copy(
+        root.worldToLocal(hand.getWorldPosition(new T.Vector3())),
+      );
+    }
+  } else weapon.gun.position.set(-0.28, 1.3, 0.5);
+  weapon.gun.rotation.set(root.userData.aiming ? 0 : 0.12, 0, 0);
+  weapon.flash.material.opacity = recoil * 0.9;
 }

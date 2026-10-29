@@ -7,12 +7,12 @@ import {
   rod,
   explorer,
   guidebot,
-  skitter,
+  presence,
   setActorRole,
 } from "./actors.js";
+import { instituteShell, partition } from "./architecture.js";
 import { midnightTower as tower } from "../../towers/tower-0001.js";
 
-// Rooms are constructed on demand. Leaving a floor disposes its GPU resources.
 export function buildRoom(world, floor, save) {
   const def = tower.rooms[floor],
     root = new T.Group(),
@@ -24,58 +24,37 @@ export function buildRoom(world, floor, save) {
     collectibles = [],
     features = {};
   world.scene.add(root);
-  world.enter(floor === 0 ? "roof" : floor === 4 ? "museum" : "interior");
-  world.museumConsole.visible = false;
-  world.exitDoor.group.visible = false;
-  world.enemies.forEach((e) => (e.visible = false));
-  world.shards.forEach((e) => (e.visible = false));
-  world.robot.visible = false;
-  const gold = mat(def.accent, 0.32, 0.65),
-    stone = mat("#3c5861", 0.5, 0.25),
-    dark = mat("#152b38"),
-    ivory = mat("#dacfb4"),
-    teal = mat("#2c6971"),
-    wood = mat("#72533c"),
-    red = mat("#a25749");
-  const instrumentTint = new T.Color(def.accent).lerp(
-    new T.Color("#aeb7b7"),
-    0.78,
-  );
-  const glow = new T.MeshStandardMaterial({
-    color: instrumentTint,
-    emissive: instrumentTint,
-    emissiveIntensity: 0.38,
+  world.enter(floor === 0 ? "roof" : "interior");
+  const steel = mat("#4e5a5c", 0.6, 0.5),
+    concrete = mat("#737975", 0.9),
+    dark = mat("#202b30", 0.9),
+    wood = mat("#62564a", 0.86),
+    paper = mat("#bebeb1", 0.94);
+  const indicator = new T.MeshStandardMaterial({
+    color: "#a7c6ba",
+    emissive: "#5d8c80",
+    emissiveIntensity: 0.6,
   });
-  const cyan = new T.MeshStandardMaterial({
-    color: "#9ebdbb",
-    emissive: "#4e797b",
-    emissiveIntensity: 0.55,
-  });
-  const violet = new T.MeshStandardMaterial({
-    color: "#94a8b1",
-    emissive: "#566c80",
-    emissiveIntensity: 0.45,
-  });
-  function label(text, x, y, z, width = 4, color = def.accent) {
+  function label(text, x, y, z, width = 3, color = "#bbc6c4") {
     const c = document.createElement("canvas");
     c.width = 1024;
-    c.height = 160;
+    c.height = 128;
     const ctx = c.getContext("2d");
-    ctx.font = "500 75px sans-serif";
+    ctx.font = "500 65px sans-serif";
     const size = Math.min(
-      75,
-      (75 * 980) / Math.max(1, ctx.measureText(text).width),
+      65,
+      (65 * 990) / Math.max(1, ctx.measureText(text).width),
     );
     ctx.font = `500 ${size}px sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillStyle = color;
-    ctx.fillText(text, 512, 80);
+    ctx.fillText(text, 512, 64);
     const texture = new T.CanvasTexture(c);
     texture.colorSpace = T.SRGBColorSpace;
     return mesh(
       root,
-      new T.PlaneGeometry(width, (width * 160) / 1024),
+      new T.PlaneGeometry(width, width / 8),
       new T.MeshBasicMaterial({
         map: texture,
         transparent: true,
@@ -84,523 +63,395 @@ export function buildRoom(world, floor, save) {
       [x, y, z],
     );
   }
-  function block(x, z, w, d, h = 1, color = stone) {
-    const b = box(root, color, [x, h / 2, z], [w, h, d]);
+  function block(x, z, w, d, h = 0.85, m = concrete) {
+    const b = box(root, m, [x, h / 2, z], [w, h, d]);
     colliders.push({ x, z, w, d, h });
     return b;
   }
-  function pillar(x, z, height = 6) {
-    mesh(root, new T.CylinderGeometry(0.3, 0.4, height, 12), ivory, [
-      x,
-      height / 2,
-      z,
-    ]);
-    mesh(root, new T.CylinderGeometry(0.6, 0.6, 0.18, 12), gold, [
-      x,
-      height,
-      z,
-    ]);
+  function desk(x, z, w = 2.8) {
+    box(root, wood, [x, 0.78, z], [w, 0.09, 1.1]);
+    for (const dx of [-w / 2 + 0.12, w / 2 - 0.12])
+      box(root, steel, [x + dx, 0.38, z], [0.08, 0.76, 0.95]);
+    colliders.push({ x, z, w, d: 1.1, h: 0.85 });
+    box(root, dark, [x + 0.45, 1.12, z - 0.1], [0.75, 0.46, 0.06]);
+    box(root, steel, [x + 0.45, 0.91, z - 0.1], [0.06, 0.25, 0.06]);
+    box(root, paper, [x - 0.7, 0.84, z + 0.1], [0.6, 0.025, 0.4]);
   }
-  function ring(x, y, z, r = 2, material = gold) {
-    return mesh(root, new T.TorusGeometry(r, 0.065, 10, 60), material, [
-      x,
-      y,
-      z,
-    ]);
-  }
-  function crystal(x, y, z, s = 0.6, material = cyan) {
-    return mesh(root, new T.OctahedronGeometry(s), material, [x, y, z]);
-  }
-  function light(x, z) {
-    ball(root, glow, [x, 3, z], [0.14, 0.24, 0.14]);
-    rod(root, gold, [x, 0, z], [x, 3, z], 0.04);
-  }
-  function cabinet(x, z, height = 3) {
-    block(x, z, 2, 0.8, height, wood);
+  function shelf(x, z, w = 2.5) {
+    block(x, z, w, 0.6, 2.2, steel);
     for (let j = 0; j < 4; j++) {
-      box(root, gold, [x, 0.5 + j * 0.65, z + 0.43], [1.9, 0.06, 0.08]);
-      for (let k = 0; k < 7; k++)
+      box(root, dark, [x, 0.3 + j * 0.51, z + 0.31], [w - 0.12, 0.43, 0.025]);
+      for (let k = 0; k < 5; k++)
         box(
           root,
-          [red, teal, ivory][(j + k) % 3],
-          [x - 0.75 + k * 0.24, 0.77 + j * 0.65, z + 0.42],
-          [0.17, 0.4, 0.12],
+          k % 2 ? paper : wood,
+          [x - w / 2 + 0.27 + (k * (w - 0.4)) / 5, 0.3 + j * 0.51, z + 0.38],
+          [(w - 0.5) / 5, 0.36, 0.2],
         );
     }
   }
-  function desk(x, z) {
-    block(x, z, 2.4, 1, 0.85, wood);
-    box(root, gold, [x, 0.9, z], [2.6, 0.1, 1.1]);
-    box(root, ivory, [x + 0.2, 1, z + 0.1], [0.8, 0.05, 0.5]);
-  }
-  function arch(x, z, r = 3) {
-    const a = ring(x, 4, z, r);
-    a.geometry.dispose();
-    a.geometry = new T.TorusGeometry(r, 0.1, 8, 40, Math.PI);
-    for (const s of [-1, 1]) pillar(x + s * r, z, 4);
-  }
-  function machine(x, z) {
-    block(x, z, 1.5, 1.3, 2.5, teal);
-    for (let i = 0; i < 3; i++) {
-      const disk = mesh(
-        root,
-        new T.CylinderGeometry(0.33, 0.33, 0.1, 20),
-        gold,
-        [x, 1 + i * 0.5, z + 0.7],
-      );
-      disk.rotation.x = Math.PI / 2;
-      ball(root, cyan, [x + 0.5, 1 + i * 0.5, z + 0.73], [0.06, 0.06, 0.03]);
+  function cabinet(x, z) {
+    block(x, z, 1.1, 0.7, 2.1, steel);
+    for (let j = 0; j < 6; j++) {
+      box(root, dark, [x, 0.35 + j * 0.27, z + 0.36], [0.83, 0.055, 0.02]);
     }
+    box(root, paper, [x, 1.7, z + 0.37], [0.3, 0.16, 0.02]);
   }
-  function instrument(g) {
-    const [x, z] = g.position,
-      group = new T.Group();
-    group.position.set(x, 0, z);
-    root.add(group);
-    box(group, dark, [0, 0.7, 0], [0.7, 1.4, 0.65]);
-    box(group, gold, [0, 1.4, 0], [0.95, 0.15, 0.78]);
-    const screen = box(
-      group,
-      save.solved.includes(g.id) ? glow : cyan,
-      [0, 1.5, 0.07],
-      [0.7, 0.05, 0.5],
-    );
-    screen.rotation.x = 0.2;
-    const halo = mesh(
-      group,
-      new T.TorusGeometry(0.42, 0.025, 8, 40),
-      save.solved.includes(g.id) ? glow : cyan,
-      [0, 2, 0],
-    );
-    animations.push((t) => (halo.rotation.y = t * 0.8));
-    label(g.optional ? "OPTIONAL CACHE" : "CALIBRATION", x, 2.8, z, 2.8);
-    targets.push({ id: g.id, kind: "math", x, z, r: 1.9, label: g.label });
-    features[g.id] = group;
+  function screen(x, z, text, w = 3) {
+    box(root, steel, [x, 0.65, z], [0.1, 1.3, 0.12]);
+    box(root, steel, [x, 0.05, z], [1.1, 0.1, 0.6]);
+    box(root, dark, [x, 1.7, z], [w, 1.3, 0.16]);
+    label(text, x, 1.7, z + 0.1, w - 0.2);
   }
-  function door(x, z, title, kind, destination) {
-    const g = new T.Group();
-    g.position.set(x, 0, z);
-    root.add(g);
-    for (const s of [-1, 1]) box(g, gold, [s * 1.5, 2, 0], [0.15, 4, 0.3]);
-    box(g, gold, [0, 4, 0], [3.2, 0.15, 0.3]);
-    const leaf = box(g, teal, [0, 1.9, 0], [2.8, 3.8, 0.15]);
-    for (let i = 0; i < 4; i++)
-      box(g, stone, [0, 0.12 + i * 0.12, 1.8 - i * 0.35], [2.7, 0.22, 0.4]);
-    label(title, x, 4.6, z + 0.2, 3.8);
-    doors.push({ leaf, base: 1.9 });
-    targets.push({
-      id: kind + destination,
-      kind,
-      x,
-      z: z + 1.3,
-      r: 1.8,
-      destination,
-      label: title,
-    });
-    return g;
+  function bench(x, z, w = 3) {
+    block(x, z, w, 0.65, 0.48, wood);
+    box(root, steel, [x, 0.85, z - 0.28], [w, 0.75, 0.08]);
   }
   function npc(kind, x, z) {
     const p = kind === "guidebot" ? guidebot() : explorer();
     p.position.set(x, 0, z);
     p.rotation.y = 0.4;
-    if (kind === "researcher") {
-      p.scale.setScalar(1.08);
-      p.userData.body.children[0].material = ivory;
-      setActorRole(p, "researcher");
-    }
+    if (kind === "researcher" || kind === "mara") setActorRole(p, kind);
     root.add(p);
     return p;
   }
-
-  if (floor !== 0 && floor !== 4) {
-    box(root, dark, [0, -0.4, 0], [29, 0.8, 24]);
-    const positions = [[], []];
-    for (let x = -13; x <= 13; x += 2)
-      for (let z = -11; z <= 11; z += 2)
-        positions[(x + z) % 4 === 0 ? 0 : 1].push([x, 0, z]);
-    positions.forEach((list, i) => {
-      const tiles = new T.InstancedMesh(
-          new T.BoxGeometry(1.97, 0.04, 1.97),
-          mat(i ? "#4c565b" : "#555e62", 0.42, 0.25),
-          list.length,
-        ),
-        matrix = new T.Matrix4();
-      list.forEach((p, j) =>
-        tiles.setMatrixAt(j, matrix.makeTranslation(...p)),
-      );
-      tiles.receiveShadow = true;
-      root.add(tiles);
-    });
-    if (def.theme === "impossible") {
-      for (const x of [-10, 10]) box(root, dark, [x, 4, -12], [8, 8, 0.3]);
-    } else box(root, dark, [0, 4, -12], [29, 8, 0.3]);
-    box(root, dark, [-14.5, 3, 0], [0.3, 6, 24]);
-    const nearWall = box(root, dark.clone(), [14.5, 3, 0], [0.3, 6, 24]);
-    nearWall.material.transparent = true;
-    nearWall.material.opacity = 0.18;
-    nearWall.material.depthWrite = false;
-    // Architectural details stay at the perimeter, clear of playable routes.
-    const steel = mat("#626e72", 0.46, 0.7),
-      panel = mat(floor > 17 ? "#343c3e" : "#596369", 0.85),
-      lightStrip = new T.MeshStandardMaterial({
-        color: "#d1d7ce",
-        emissive: "#a7b7b8",
-        emissiveIntensity: 1.3,
-      });
-    box(root, steel, [0, 0.2, -11.78], [28.6, 0.3, 0.06]);
-    for (const x of [-14.29, 14.29])
-      box(root, steel, [x, 0.2, 0], [0.06, 0.3, 23.6]);
-    for (const x of [-12, -8, -4, 0, 4, 8, 12]) {
-      if (def.theme !== "impossible" || Math.abs(x) > 6) {
-        box(root, panel, [x, 3.5, -11.82], [3.92, 5.9, 0.04]);
-        box(root, steel, [x, 6.55, -11.65], [3.9, 0.25, 0.32]);
-        box(root, lightStrip, [x, 6.52, -11.42], [2.4, 0.08, 0.03]);
-      }
-    }
-    for (const y of [5.1, 5.36])
-      rod(root, steel, [-14.1, y, -11.6], [-14.1, y, 11.5], 0.055);
-    // Vented switchgear, warning plate and a wall-mounted service conduit.
-    box(root, steel, [-13, 2.1, -11.56], [1.1, 1.8, 0.35]);
-    for (let j = 0; j < 6; j++)
-      box(root, dark, [-13, 1.7 + j * 0.16, -11.36], [0.72, 0.045, 0.03]);
-    rod(root, steel, [-13, 3, -11.55], [-13, 6.4, -11.55], 0.06);
-    for (const x of [-13, 13]) {
-      box(root, gold, [x, 0.035, 0], [0.05, 0.03, 23]);
-      pillar(x, -9);
-      pillar(x, 6);
-      light(x * 0.9, 3);
-    }
-    label(def.name.toUpperCase(), 2, 7.1, -11.65, 8, "#aeb9bc");
-    label(
-      tower.floors[floor].startsWith("B")
-        ? tower.floors[floor]
-        : "FLOOR " + tower.floors[floor],
-      -11,
-      6.8,
-      -11.7,
-      3,
-    );
+  function panel(x, z, title) {
+    const group = new T.Group();
+    group.position.set(x, 0, z);
+    root.add(group);
+    box(group, steel, [0, 0.65, 0], [0.72, 1.3, 0.6]);
+    box(group, dark, [0, 1.35, 0], [0.8, 0.12, 0.65]);
+    box(group, indicator, [0, 1.42, 0.04], [0.62, 0.025, 0.43]);
+    label(title, x, 1.95, z + 0.15, 2.5);
+    return group;
   }
-  // Geometry and interactive identity differ by room, not just by palette.
+  function hazardPipe(x, z) {
+    rod(root, steel, [x, 0, z], [x, 2.95, z], 0.13);
+    const steam = mesh(
+      root,
+      new T.ConeGeometry(0.48, 1.7, 12),
+      new T.MeshStandardMaterial({
+        color: "#bac8c6",
+        transparent: true,
+        opacity: 0.18,
+        depthWrite: false,
+      }),
+      [x, 1, z + 0.6],
+    );
+    (features.steam ||= []).push(steam);
+  }
+  if (floor === 0) {
+    colliders.push(...world.obstacles, { x: 8, z: -9.5, w: 8, d: 4, h: 3.5 });
+    targets.push({
+      kind: "stairs",
+      core: "B",
+      x: 8,
+      z: -6.5,
+      r: 2.2,
+      destination: 1,
+      label: "Enter the tower · Floor 17",
+    });
+    targets.push({
+      kind: "stairs",
+      core: "A",
+      x: -9,
+      z: 7,
+      r: 1.8,
+      destination: 1,
+      label: "Stair A · enter Floor 17",
+    });
+  } else {
+    instituteShell(root, colliders, label, floor, def.name);
+    for (const [core, x, z] of [
+      ["B", 9, -7.7],
+      ["A", -9, 8],
+    ])
+      targets.push({
+        kind: "stairwell",
+        core,
+        x,
+        z,
+        r: 1.8,
+        label: `Fire stair ${core} · choose up or down`,
+      });
+  }
   switch (def.theme) {
     case "roof":
-      colliders.push(...world.obstacles, { x: 8, z: -9, w: 10, d: 3, h: 6 });
-      world.roofConsole.visible = false;
-      targets.push({
-        kind: "stairs",
-        x: 8,
-        z: -6.5,
-        r: 2.2,
-        destination: 1,
-        label: "Enter reception · Floor 17",
-      });
       break;
     case "reception":
-      desk(0, -3);
-      for (const x of [-6, 5]) {
-        cabinet(x, -9, 2);
-        arch(x, -10, 2);
-      }
+      desk(0, -3, 4.4);
+      bench(-7, 1);
+      bench(6, 2);
+      shelf(-6, -9);
+      cabinet(4, -9);
+      partition(root, colliders, 3, -0.5, 0.15, 3, { glass: true });
+      for (const x of [-4, 4])
+        partition(root, colliders, x, -5.5, 4, 0.12, { glass: true });
+      screen(-4, -5.5, "SECURITY / CONNECTION LOST", 3);
       features.robot = npc("guidebot", -4, 2);
       features.robot.rotation.z = -0.2;
-      label("WELCOME TO THE MUSEUM", 0, 3, -3, 6);
+      features.security = panel(0, -1.7, "FIRE DOOR CONTROL");
+      targets.push({
+        kind: "security",
+        id: "receptionSecured",
+        x: 0,
+        z: -0.3,
+        r: 1.8,
+        label: "Seal the roof stairwell · recover access badge",
+      });
       break;
     case "lift-hall":
-      for (const x of [-5, 5]) {
-        block(x, 0, 1.5, 4, 0.6, ivory);
-        arch(x, -6, 2);
-      }
-      features.number = label("16", -10, 4.8, -6.6, 2);
-      features.extraNumber = label("19", -10, 4.8, -6.5, 2, "#cda1ff");
+      partition(root, colliders, -3, -0.5, 0.18, 7, { glass: true });
+      partition(root, colliders, 4, -0.5, 0.18, 7, { glass: true });
+      bench(-7, 0);
+      bench(7, 1);
+      cabinet(-6, -6);
+      features.number = label("16", -10, 3, -6.8, 1);
+      features.extraNumber = label("19", -10, 3, -6.75, 1, "#d6bbb0");
       features.extraNumber.visible = false;
+      features.security = panel(6, 3, "EMERGENCY STAIR RELEASE");
+      targets.push({
+        kind: "security",
+        id: "routeReleased",
+        x: 6,
+        z: 4.2,
+        r: 1.8,
+        label: "Use the badge · release the emergency route",
+      });
       break;
     case "numbers":
-      for (let i = 0; i < 5; i++) {
-        const x = -6 + i * 3;
-        block(x, -3, 1, 1, 0.6, teal);
-        label(["0", "1", "π", "∞", "φ"][i], x, 2, -3, 2.8);
-        const r = ring(x, 2, -3, 0.85);
-        animations.push((t) => (r.rotation.y = t * 0.3 + i));
+      for (const x of [-6, 0, 5]) {
+        block(x, -2, 1.6, 1.4, 0.8, wood);
+        screen(
+          x,
+          -2.4,
+          ["0 · 1 · 1 · 2 · 3", "ARCHIVE 041", "SIGNAL / LOCKED"][
+            [-6, 0, 5].indexOf(x)
+          ],
+          1.6,
+        );
       }
-      desk(-4, 3);
+      partition(root, colliders, -3, 2, 4, 0.16);
+      desk(2, 3);
       break;
-    case "museum":
-      colliders.push({ x: 0, z: -1, w: 5.6, d: 5.6, h: 8 });
+    case "museum": {
+      // A mounted research demonstrator, fixed to a concrete plinth and gantry.
+      block(0, -1, 3.6, 3.6, 0.65);
+      features.mechanism = new T.Group();
+      features.mechanism.position.set(0, 1.65, -1);
+      root.add(features.mechanism);
+      for (let i = 0; i < 3; i++) {
+        const r = mesh(
+          features.mechanism,
+          new T.TorusGeometry(0.8 + i * 0.18, 0.045, 8, 48),
+          steel,
+        );
+        r.rotation.x = i * 0.7;
+        animations.push((t) => (r.rotation.y = t * 0.12 + i));
+      }
+      for (const x of [-2.2, 2.2]) {
+        block(x, -1, 0.15, 0.15, 3.1, steel);
+      }
+      box(root, steel, [0, 3.05, -1], [4.5, 0.2, 0.2]);
+      features.pendulum = new T.Group();
+      features.pendulum.position.set(-4, 3, -2);
+      root.add(features.pendulum);
+      rod(features.pendulum, steel, [0, 0, 0], [0, -2.3, 0], 0.04);
+      ball(features.pendulum, steel, [0, -2.3, 0], [0.4, 0.4, 0.4]);
+      animations.push(
+        (t) =>
+          (features.pendulum.rotation.z = save.flags.sculpture
+            ? Math.sin(t * 2.8) * 0.9
+            : Math.sin(t * 0.6) * 0.06),
+      );
       features.robot = npc("guidebot", -4, 2);
-      features.mechanism = world.core;
+      shelf(-7, -9);
+      shelf(5, -9);
       targets.push({
         kind: "release",
         x: -5,
         z: 1,
         r: 1.8,
-        label: "Release the hanging sculpture",
+        label: "Release the gantry counterweight · stagger pursuers",
       });
       break;
+    }
     case "playroom":
-      for (let i = 0; i < 7; i++) {
-        const x = -7 + i * 2,
-          z = Math.sin(i) * 2;
-        block(x, z, 1.1, 1.1, 0.5 + (i % 3) * 0.25, [teal, red, gold][i % 3]);
-        label(String(i + 1), x, 1.6, z, 1);
-      }
-      const mobile = new T.Group();
-      root.add(mobile);
-      for (let i = 0; i < 5; i++)
-        crystal(
-          -6 + i * 3,
-          5 + Math.sin(i),
-          -5,
-          0.6,
-          [glow, cyan, violet][i % 3],
-        );
-      arch(0, -8, 4);
+      for (const x of [-5, 1, 6]) desk(x, 0, 2.4);
+      shelf(-5, -6);
+      screen(1, -5, "EVACUATION IN PROGRESS", 5);
+      partition(root, colliders, -9, -1, 0.15, 5, { glass: true });
       break;
     case "power":
     case "generator":
-    case "distribution": {
-      for (const x of [-6, -2, 2]) machine(x, -4);
-      for (let i = 0; i < 3; i++) {
-        const z = -3 + i * 3;
-        rod(root, gold, [-11, 4, z], [11, 4, z], 0.13);
-        const turbine = ring(-5 + i * 5, 2, z, 1.3);
-        for (let j = 0; j < 5; j++) {
-          const vane = box(
-            turbine,
-            ivory,
-            [Math.cos(j * 1.25) * 0.65, Math.sin(j * 1.25) * 0.65, 0],
-            [1, 0.14, 0.1],
-          );
-          vane.rotation.z = j * 1.25;
-        }
-        animations.push(
-          (t) =>
-            (turbine.rotation.z =
-              t * (save.solved.includes("power") ? 1.3 : 0.15)),
-        );
+    case "distribution":
+      for (const x of [-6, -3, 2]) {
+        cabinet(x, -4);
+        box(root, dark, [x, 2.12, -4], [0.95, 0.03, 0.6]);
+        rod(root, steel, [x, 2.2, -4], [x, 3, -4], 0.06);
       }
-      features.steam = [];
-      for (const x of [-4, 4]) {
-        const steam = mesh(
-          root,
-          new T.ConeGeometry(0.65, 2.7, 10),
-          new T.MeshStandardMaterial({
-            color: "#b9dfe0",
-            transparent: true,
-            opacity: 0.25,
-            depthWrite: false,
-          }),
-          [x, 1.4, 3],
-        );
-        features.steam.push(steam);
-      }
+      rod(root, steel, [-7, 3, -4], [4, 3, -4], 0.12);
+      hazardPipe(-4, 2.4);
+      hazardPipe(4, 2.4);
       break;
-    }
     case "classroom":
-      for (const x of [-5, 0, 5]) for (const z of [-2, 2]) desk(x, z);
-      box(root, teal, [0, 3.5, -8], [8, 3, 0.2]);
-      label("A QUESTION IS A DOOR", 0, 3.6, -7.8, 7);
-      cabinet(-11, -3, 3);
+      for (const x of [-5, 0, 5]) for (const z of [-2, 2]) desk(x, z, 2.4);
+      screen(0, -6, "CORRESPONDENCE / TEST CANCELLED", 6);
+      shelf(-11, -3);
       break;
-    case "atrium": {
-      const voidBox = block(0, 0, 5.2, 7, 0.1, dark);
-      voidBox.material = mat("#071622");
-      for (const x of [-3, 3]) {
-        rod(root, gold, [x, 0.9, -4], [x, 0.9, 4], 0.05);
-        for (const z of [-4, 0, 4])
-          rod(root, gold, [x, 0, z], [x, 0.9, z], 0.04);
+    case "atrium":
+      // The former "floating atrium" is an enclosed conference hall with a
+      // supported lightwell exhibit, safe railings and service passageways.
+      block(0, 0, 4, 5, 0.45, steel);
+      for (const x of [-2.2, 2.2]) {
+        rod(root, steel, [x, 0.4, -2.6], [x, 0.4, 2.6], 0.05);
+        for (const z of [-2.6, 2.6])
+          rod(root, steel, [x, 0.4, z], [x, 1.2, z], 0.04);
+        rod(root, steel, [x, 1.2, -2.6], [x, 1.2, 2.6], 0.04);
       }
-      for (let i = 0; i < 8; i++) {
-        const p = crystal(
-          Math.cos(i * 0.8) * 5,
-          4 + i * 0.25,
-          Math.sin(i * 0.8) * 4,
-          0.5,
-        );
-        animations.push((t) => (p.rotation.y = t * 0.5 + i));
-      }
-      arch(0, -7, 6);
+      screen(0, -5, "INSTITUTE EVACUATION / NO SIGNAL", 5);
+      bench(-7, 1);
+      bench(7, 1);
       break;
-    }
     case "archive":
-      for (const x of [-6, 0, 6]) for (const z of [-4, 0]) cabinet(x, z, 3.5);
+      for (const x of [-6, 0, 6]) for (const z of [-4, 0]) shelf(x, z, 3);
       features.robot = npc("guidebot", -4, 3);
       features.fallen = block(-4, 3, 2.3, 0.7, 0.55, wood);
       features.fallen.rotation.z = 0.2;
       break;
     case "robotics":
       for (const x of [-6, 0, 6]) {
-        block(x, -3, 2, 2, 0.5, ivory);
+        desk(x, -3);
         const arm = new T.Group();
-        arm.position.set(x, 0.5, -3);
+        arm.position.set(x, 0.85, -3);
         root.add(arm);
-        rod(arm, gold, [0, 0, 0], [0, 2, 0], 0.18);
-        rod(arm, ivory, [0, 2, 0], [1.7, 2.8, 0], 0.12);
-        ball(arm, cyan, [1.7, 2.8, 0], [0.2, 0.2, 0.2]);
-        animations.push((t) => (arm.rotation.y = Math.sin(t * 0.7 + x) * 0.9));
+        rod(arm, steel, [0, 0, 0], [0, 0.8, 0], 0.12);
+        rod(arm, steel, [0, 0.8, 0], [0.7, 1.3, 0], 0.09);
+        box(arm, dark, [0.7, 1.3, 0], [0.18, 0.25, 0.25]);
+        animations.push((t) => (arm.rotation.y = Math.sin(t * 0.35 + x) * 0.5));
       }
-      label("DO NOT ACTIVATE", 0, 5, -8, 6);
+      partition(root, colliders, 0, 1, 6, 0.15, { glass: true });
       break;
     case "garden":
-      for (let i = 0; i < 12; i++) {
-        const angle = i * 2.4,
-          r = 0.9 + Math.sqrt(i) * 1.6,
-          x = Math.cos(angle) * r,
-          z = Math.sin(angle) * r;
-        block(x, z, 0.8, 0.8, 0.35, wood);
-        const plant = new T.Group();
-        plant.position.set(x, 0.4, z);
-        root.add(plant);
-        rod(plant, wood, [0, 0, 0], [0, 1.8, 0], 0.05);
-        for (let j = 0; j < 5; j++) {
-          const leaf = ball(
-            plant,
-            mat(j % 2 ? "#659b77" : "#88b58d"),
-            [Math.sin(j * 2) * 0.45, 0.6 + j * 0.25, Math.cos(j * 2) * 0.3],
-            [0.42, 0.16, 0.25],
-          );
-          leaf.rotation.z = j * 0.5;
+      for (const x of [-6, -1, 4])
+        for (const z of [-3, 2]) {
+          block(x, z, 1.8, 1.2, 0.5, concrete);
+          for (let i = 0; i < 5; i++) {
+            const sx = x - 0.65 + i * 0.3;
+            rod(root, wood, [sx, 0.5, z], [sx, 1.7, z], 0.025);
+            for (let j = 0; j < 4; j++) {
+              const l = ball(
+                root,
+                mat("#536759"),
+                [sx + Math.sin(j * 2) * 0.15, 0.8 + j * 0.23, z],
+                [0.23, 0.06, 0.12],
+              );
+              l.rotation.z = j * 0.5;
+            }
+          }
         }
-      }
-      arch(0, -8, 6);
       break;
-    case "impossible": {
+    case "impossible":
+      desk(-5, 1);
+      desk(5, 1);
+      for (const x of [-6, 6]) cabinet(x, -5);
+      // The anomaly is evidence on a monitor, not a physically infinite room.
       features.expansion = new T.Group();
       root.add(features.expansion);
-      for (let i = 0; i < 12; i++) {
-        const z = -5 - i * 3,
-          r = 2 + i * 0.45;
-        const frame = mesh(
+      box(features.expansion, dark, [0, 1.7, -5], [4, 2, 0.16]);
+      for (let i = 0; i < 9; i++)
+        box(
           features.expansion,
-          new T.TorusGeometry(r, 0.08, 8, 4),
-          gold,
-          [0, 3 + i * 0.25, z],
+          indicator,
+          [-1.6 + i * 0.4, 1.7 + Math.sin(i) * 0.4, -4.9],
+          [0.03, 0.25 + i * 0.06, 0.025],
         );
-        frame.rotation.z = Math.PI / 4 + i * 0.08;
-      }
-      for (let i = 0; i < 8; i++) {
-        const p = crystal(
-          Math.sin(i * 2) * 4,
-          2 + i * 0.5,
-          -4 - i * 3,
-          0.6,
-          violet,
-        );
-        animations.push((t) => (p.rotation.z = t * 0.3 + i));
-      }
-      block(-5, 1, 2, 2, 0.8, teal);
-      block(5, 1, 2, 2, 0.8, teal);
+      label("SAME CORRIDOR. TWO DIFFERENT MEASUREMENTS.", 0, 2.9, -5, 5);
       break;
-    }
-    case "observation": {
-      const glass = mesh(
-        root,
-        new T.BoxGeometry(12, 5, 0.1),
-        new T.MeshPhysicalMaterial({
-          color: "#7e9cab",
-          transparent: true,
-          opacity: 0.2,
-          roughness: 0.2,
-          metalness: 0.5,
-        }),
-        [0, 2.5, -5],
-      );
-      features.glass = glass;
-      for (const x of [-6, 0, 6]) rod(root, gold, [x, 0, -5], [x, 5, -5], 0.04);
+    case "observation":
+      features.glass = partition(root, colliders, 0, -5, 12, 0.12, {
+        glass: true,
+      });
+      desk(-5, 1);
+      desk(4, 1);
       break;
-    }
     case "refuge":
       desk(2, -4);
-      block(-4, 1, 4, 1, 0.5, wood);
+      bench(-4, 1, 4);
       features.researcher = npc("researcher", -3, 2);
-      label("TEST DELAYED. NO. CANCEL IT.", 0, 4, -8, 8);
+      shelf(5, -7);
+      screen(-5, -5, "TEST DELAYED. NO. CANCEL IT.", 4);
       break;
-    case "lift-car": {
-      box(root, teal, [0, 2.6, -1], [7, 5.2, 0.2]);
-      for (const x of [-3.5, 3.5]) box(root, stone, [x, 2.6, 1], [0.2, 5.2, 4]);
-      const ceiling = box(root, ivory, [0, 5.2, 1], [7, 0.16, 4]);
-      features.ceiling = ceiling;
-      features.dent = ball(root, dark, [0, 5.1, 1], [1, 0.05, 0.8]);
-      label("RESEARCH LIFT B", 0, 4.2, -0.8, 5);
+    case "lift-car":
+      features.ceiling = box(root, steel, [0, 2.65, -5], [3, 0.12, 2]);
+      features.dent = ball(root, dark, [0, 2.62, -5], [0.6, 0.04, 0.5]);
+      cabinet(-5, -3);
+      bench(5, 1);
       break;
-    }
-    case "lobby": {
-      arch(0, -7, 5);
-      block(0, -2, 2.4, 2.4, 0.55, ivory);
-      features.statue = crystal(0, 2, -2, 1.35, gold);
-      features.alternate = mesh(
-        root,
-        new T.TorusKnotGeometry(0.8, 0.22, 64, 10),
-        violet,
-        [0, 2, -2],
-      );
+    case "lobby":
+      desk(-4, -1, 4);
+      bench(6, 3, 4);
+      block(0, -2, 1.2, 1.2, 0.8);
+      features.statue = box(root, steel, [0, 1.5, -2], [0.35, 1.4, 0.35]);
+      features.alternate = box(root, steel, [0, 1.5, -2], [0.8, 1.4, 0.12]);
       features.alternate.visible = false;
-      for (const x of [-6, 6]) block(x, 3, 4, 1, 0.6, wood);
       break;
-    }
-    case "recording": {
+    case "recording":
       desk(-4, 0);
       desk(4, 0);
-      const model = ring(0, 3, -4, 2.3, violet);
-      animations.push((t) => (model.rotation.y = t * 0.2));
+      screen(0, -5, "CORRESPONDENCE TEST 07", 4);
       for (const x of [-2, 2]) {
-        const scientist = npc("researcher", x, -3);
-        scientist.visible = false;
-        (features.memoryActors ||= []).push(scientist);
+        const p = npc(x > 0 ? "mara" : "researcher", x, -3);
+        p.visible = false;
+        (features.memoryActors ||= []).push(p);
       }
-      label("CORRESPONDENCE TEST 07", 0, 5.5, -7, 7);
       break;
-    }
     case "apparatus": {
-      block(0, -3, 6, 5, 0.3, dark);
+      block(0, -3, 5, 3, 0.4);
       features.portal = new T.Group();
-      features.portal.position.set(0, 4, -4);
+      features.portal.position.set(0, 1.7, -3);
       root.add(features.portal);
+      for (const x of [-2.4, 2.4])
+        box(root, steel, [x, 1.8, -3], [0.3, 3, 0.8]);
+      box(root, steel, [0, 3.25, -3], [5.1, 0.25, 0.8]);
       for (let i = 0; i < 3; i++) {
-        const r = mesh(
+        const ring = mesh(
           features.portal,
-          new T.TorusGeometry(3 + i * 0.35, 0.1, 10, 100),
-          i % 2 ? violet : gold,
+          new T.TorusGeometry(1.1 + i * 0.17, 0.06, 8, 64),
+          steel,
         );
-        r.rotation.y = i * 0.25;
-        animations.push((t) => (r.rotation.z = t * (i % 2 ? -0.13 : 0.13)));
+        ring.rotation.y = i * 0.15;
+        animations.push((t) => (ring.rotation.z = t * 0.1 * (i % 2 ? -1 : 1)));
       }
-      const inverted = new T.Group();
-      inverted.rotation.z = Math.PI;
-      inverted.position.set(0, 5, -5);
-      root.add(inverted);
-      for (let i = 0; i < 8; i++) {
-        box(inverted, stone, [0, i * 0.75, 0], [3, 0.12, 2]);
-        for (const x of [-1.3, 1.3])
-          box(inverted, gold, [x, i * 0.75 + 0.35, 0], [0.1, 0.7, 2]);
-      }
-      features.inverted = inverted;
+      features.inverted = new T.Group();
+      features.inverted.position.set(0, 1.8, -3.2);
+      features.inverted.rotation.z = Math.PI;
+      root.add(features.inverted);
+      for (let i = 0; i < 8; i++)
+        box(
+          features.inverted,
+          indicator,
+          [0, -0.85 + i * 0.21, 0],
+          [0.8, 0.04, 0.5],
+        );
+      cabinet(-5, -4);
+      cabinet(5, -4);
       break;
     }
-  }
-
-  if (floor !== 0 && floor < 20)
-    door(9, -9, `DOWN · ${tower.floors[floor + 1]}`, "stairs", floor + 1);
-  if (floor > 0) {
-    const stairs = new T.Group();
-    root.add(stairs);
-    for (let i = 0; i < 6; i++)
-      box(stairs, stone, [-9, 0.1 + i * 0.13, 8 - i * 0.35], [2.6, 0.2, 0.4]);
-    label(`UP · ${tower.floors[floor - 1]}`, -9, 2.8, 7, 3);
-    targets.push({
-      kind: "stairs",
-      x: -9,
-      z: 8,
-      r: 1.9,
-      destination: floor - 1,
-      label: `Climb to ${tower.floors[floor - 1]}`,
-    });
   }
   for (const lift of tower.lifts.filter((l) => l.stops.includes(floor))) {
     const [x, z] = lift.position;
-    box(root, teal, [x, 1.8, z], [2.4, 3.6, 0.2]);
-    for (const dx of [-1.2, 1.2])
-      box(root, gold, [x + dx, 1.8, z + 0.15], [0.08, 3.8, 0.1]);
-    label("LIFT " + lift.id, x, 4, z + 0.15, 2.6);
+    if (floor === 0) {
+      /* Public lift terminates in the enclosed roof plant. */ label(
+        "LIFT A / ROOF PLANT",
+        -10,
+        2.6,
+        -7,
+        2.7,
+      );
+      box(root, steel, [-10, 1.3, -7], [2.6, 2.6, 0.5]);
+      colliders.push({ x: -10, z: -7.3, w: 2.8, d: 1, h: 2.8 });
+    }
     targets.push({
       kind: "lift",
       id: lift.id,
@@ -610,36 +461,33 @@ export function buildRoom(world, floor, save) {
       label: `Call ${lift.id === "A" ? "public" : lift.id === "B" ? "research" : "freight"} lift ${lift.id}`,
     });
   }
-  for (const gate of tower.gates.filter((g) => g.floor === floor))
-    instrument(gate);
-  for (const escalator of tower.escalators.filter(
+  for (const g of tower.gates.filter((g) => g.floor === floor)) {
+    const [x, z] = g.position;
+    features[g.id] = panel(
+      x,
+      z,
+      g.optional ? "SUPPLY LOCK" : "SYSTEM CALIBRATION",
+    );
+    targets.push({ id: g.id, kind: "math", x, z, r: 1.9, label: g.label });
+  }
+  // Existing short museum escalator routes now use enclosed stair connections;
+  // no decorative escalators stop in midair inside a room.
+  for (const e of tower.escalators.filter(
     (e) => e.from === floor || e.to === floor,
   )) {
-    const up = escalator.to === floor,
-      z = up ? 3 : -1,
-      steps = new T.Group();
-    root.add(steps);
-    for (let i = 0; i < 9; i++)
-      box(steps, stone, [11, 0.08 + i * 0.1, z - i * 0.27], [1.6, 0.15, 0.3]);
-    for (const x of [10, 12])
-      rod(root, gold, [x, 0.8, z + 0.3], [x, 1.8, z - 2.5], 0.05);
-    animations.push((t) =>
-      steps.children.forEach(
-        (s, i) =>
-          (s.position.y =
-            0.08 + ((((i + (up ? -t : t) * 1.5) % 9) + 9) % 9) * 0.1),
-      ),
-    );
+    const up = e.to === floor;
     targets.push({
       kind: "escalator",
       x: 11,
-      z: z + 0.6,
+      z: up ? 3.6 : -0.4,
       r: 1.5,
-      destination: up ? escalator.from : escalator.to,
-      label: "Ride escalator " + (up ? "up" : "down"),
+      destination: up ? e.from : e.to,
+      label: "Gallery service stair · " + (up ? "up" : "down"),
     });
+    box(root, steel, [12.6, 1.15, up ? 2.5 : -1.5], [0.18, 2.3, 2]);
+    label("GALLERY STAIR", 11, 2.5, up ? 2.8 : -1.2, 2.5);
   }
-  for (const object of tower.objects.filter(
+  for (const o of tower.objects.filter(
     (o) =>
       o.floor === floor &&
       !["guidebot", "ladder", "allocation", "researcher"].includes(o.id),
@@ -654,33 +502,28 @@ export function buildRoom(world, floor, save) {
             : floor === 18
               ? [-8, -5]
               : [5, 4];
-    box(root, wood, [x, 0.7, z], [1.1, 1.4, 0.6]);
-    box(root, ivory, [x, 1.45, z], [0.85, 0.06, 0.5]);
-    ball(root, glow, [x, 2, z], [0.07, 0.07, 0.07]);
+    box(root, wood, [x, 0.6, z], [1.1, 1.2, 0.6]);
+    box(root, paper, [x, 1.22, z], [0.75, 0.03, 0.4]);
     targets.push({
       kind: "record",
-      id: object.id,
+      id: o.id,
       x,
       z: z + 0.6,
       r: 1.6,
-      label: object.title,
+      label: o.title,
     });
   }
   for (const [i, pos] of (def.collect || []).entries()) {
     const group = new T.Group();
     group.position.set(pos[0], 0.25, pos[1]);
     root.add(group);
-    box(group, dark, [0, 0, 0], [0.65, 0.3, 0.9]);
-    box(group, ivory, [0, 0.16, 0], [0.5, 0.025, 0.65]);
-    const indicator = box(group, cyan, [0, 0.18, 0.24], [0.3, 0.025, 0.05]);
-    group.rotation.y = i * 0.7;
+    box(group, dark, [0, 0, 0], [0.5, 0.25, 0.7]);
+    box(group, paper, [0, 0.14, 0], [0.4, 0.02, 0.5]);
+    box(group, indicator, [0, 0.16, 0.15], [0.22, 0.02, 0.025]);
     group.visible = !save.collected.includes(`${floor}:${i}`);
     collectibles.push({ group, id: `${floor}:${i}` });
-    animations.push((t) => {
-      indicator.visible = Math.sin(t * 2 + i) > -0.8;
-    });
   }
-  if (def.object)
+  if (def.object) {
     targets.push({
       kind: "object",
       id: def.object,
@@ -694,13 +537,13 @@ export function buildRoom(world, floor, save) {
             ? "Talk to the researcher"
             : "Allocate ten power units",
     });
-  if (def.object === "allocation") {
-    machine(-4, 2);
-    label("10 POWER UNITS", -4, 3.6, 2, 3);
+    if (def.object === "allocation") panel(-4, 2, "10 POWER UNITS");
   }
   if (def.ladder) {
-    for (let i = 0; i < 12; i++)
-      rod(root, gold, [11, i * 0.3, 0], [12, i * 0.3, 0], 0.04);
+    for (const x of [10.6, 11.4])
+      rod(root, steel, [x, 0, -0.3], [x, 3.3, -0.3], 0.035);
+    for (let i = 0; i < 11; i++)
+      rod(root, steel, [10.6, i * 0.3, -0.3], [11.4, i * 0.3, -0.3], 0.035);
     targets.push({
       kind: "ladder",
       x: 11,
@@ -711,41 +554,62 @@ export function buildRoom(world, floor, save) {
     });
   }
   if (def.exit) {
-    door(4, -8, "CAMPUS EXIT", "exit", null);
-    targets.at(-1).x = 4;
-    targets.at(-1).z = -6.5;
+    box(root, steel, [4, 1.2, -8], [2.6, 2.4, 0.16]);
+    label("CAMPUS EXIT", 4, 2.75, -7.8, 3);
+    targets.push({ kind: "exit", x: 4, z: -6.5, r: 1.8, label: "Campus exit" });
   }
   if (floor === 13 || floor === 20 || save.escape) {
-    const watcher = explorer();
-    watcher.scale.set(1.1, 1.7, 0.8);
-    watcher.position.set(floor === 13 ? 0 : 6, 0, -7);
-    watcher.traverse((o) => {
-      if (o.isMesh) o.material = mat("#0b1421", 0.8);
-    });
-    root.add(watcher);
-    features.watcher = watcher;
-    watcher.visible = floor !== 13;
+    const p = presence();
+    p.position.set(floor === 13 ? 0 : 6, 0, -7);
+    p.visible = floor !== 13;
+    root.add(p);
+    features.watcher = p;
   }
+  const sealed =
+    (floor === 1 && save.flags.receptionSecured) ||
+    (floor === 2 && save.flags.routeReleased);
   const count =
     save.flags.ventilation && floor >= 14 && !save.escape
       ? 0
-      : Math.min(6, (def.enemies || 0) + (save.escape && floor >= 17 ? 3 : 0));
+      : Math.min(4, (def.enemies || 0) + (save.escape && floor >= 17 ? 2 : 0));
+  const starts = def.threatPositions || [
+    [-7, -4],
+    [7, -2],
+    [4, -6],
+    [-5, 4],
+  ];
   for (let i = 0; i < count; i++) {
-    const kind =
-        (floor === 10 || floor === 14) && i === 0 ? "guidebot" : "skitter",
-      e = kind === "guidebot" ? guidebot() : skitter();
-    e.position.set([-7, 7, 4, -5, 5, 0][i], 0, [-4, -2, -6, 4, 4, 6][i]);
-    e.userData.kind = kind;
+    const e = presence();
+    const [x, z] = starts[i % starts.length];
+    e.position.set(x, 0, z);
+    e.userData.home = { x, z };
+    e.userData.patrol = [
+      { x, z },
+      { x: x > 0 ? x - 3 : x + 3, z: z + 3 },
+    ];
     e.userData.phase = i * 1.3;
     e.userData.stun = 0;
+    e.userData.grace = floor === 0 ? 5 : 2;
+    e.userData.disabled = false;
+    e.visible = true;
     root.add(e);
     enemies.push(e);
+  }
+  // A full-height rolling fire door visibly seals the danger when operated.
+  if (floor === 1 || floor === 2) {
+    const x = -9,
+      z = 8.5;
+    features.shutter = box(
+      root,
+      steel,
+      [x, sealed ? 1.2 : 3.5, z],
+      [2.6, 2.4, 0.12],
+    );
   }
   if (save.flags.guidebot && features.fallen) {
     features.fallen.position.y = 2;
     features.robot.rotation.z = 0;
   }
-  if (save.flags.sculpture && floor === 4) world.pendulum.rotation.z = 1.4;
   return {
     root,
     def,
@@ -758,35 +622,41 @@ export function buildRoom(world, floor, save) {
     features,
     animate(t, dt) {
       animations.forEach((fn) => fn(t, dt));
-      features.robot &&
-        (features.robot.userData.head.rotation.z = Math.sin(t) * 0.1);
-      if (features.steam)
-        features.steam.forEach((s, i) => {
-          s.visible = (t + i * 2) % 6 > 4.3;
-          s.scale.y = 0.6 + Math.sin(t * 7) * 0.1;
-        });
+      features.steam?.forEach((s, i) => {
+        s.visible = (t + i * 2) % 6 > 4.3;
+        s.scale.y = 0.8 + Math.sin(t * 7) * 0.1;
+      });
+      if (features.shutter) {
+        const closed =
+          (floor === 1 && save.flags.receptionSecured) ||
+          (floor === 2 && save.flags.routeReleased);
+        features.shutter.position.y = T.MathUtils.lerp(
+          features.shutter.position.y,
+          closed ? 1.2 : 3.5,
+          Math.min(1, dt * 4),
+        );
+      }
     },
     dispose() {
       world.scene.remove(root);
-      const geometries = new Set(),
-        materials = new Set(),
-        textures = new Set();
+      const gs = new Set(),
+        ms = new Set(),
+        ts = new Set();
       root.traverse((o) => {
         if (o.isSkinnedMesh) o.skeleton.dispose();
-        if (o.geometry) geometries.add(o.geometry);
+        if (o.geometry) gs.add(o.geometry);
         for (const m of Array.isArray(o.material) ? o.material : [o.material])
           if (m) {
-            materials.add(m);
-            if (m.map && !m.userData.sharedMaps) textures.add(m.map);
+            ms.add(m);
+            if (m.map && !m.userData.sharedMaps) ts.add(m.map);
           }
       });
-      geometries.forEach((g) => g.dispose());
-      materials.forEach((m) => m.dispose());
-      textures.forEach((t) => t.dispose());
+      gs.forEach((g) => g.dispose());
+      ms.forEach((m) => m.dispose());
+      ts.forEach((t) => t.dispose());
     },
   };
 }
-
 export function buildCampus(world) {
   world.enter("interior");
   world.city.visible = !world.nightSky;

@@ -58,20 +58,22 @@ export function createSound() {
     const seq =
       type === "solve"
         ? [220, 330]
-        : type === "pulse"
+        : ["pulse", "stun"].includes(type)
           ? [170, 550]
-          : type === "jump"
-            ? [260, 390]
-            : type === "shard"
-              ? [420, 310]
-              : type === "hurt"
-                ? [160, 100]
-                : [330];
+          : type === "shove"
+            ? [95, 65]
+            : type === "jump"
+              ? [260, 390]
+              : type === "shard"
+                ? [420, 310]
+                : type === "hurt"
+                  ? [160, 100]
+                  : [330];
     seq.forEach((f, i) => {
       const o = ctx.createOscillator(),
         g = ctx.createGain(),
         t = ctx.currentTime + i * 0.09;
-      o.type = type === "pulse" ? "triangle" : "sine";
+      o.type = ["pulse", "stun"].includes(type) ? "triangle" : "sine";
       o.frequency.setValueAtTime(f, t);
       g.gain.setValueAtTime(0, t);
       g.gain.linearRampToValueAtTime(0.22, t + 0.015);
@@ -110,10 +112,22 @@ export function createSound() {
       if (!voice) window.speechSynthesis?.cancel();
       return voice;
     },
-    say(text) {
+    say(text, speaker = "") {
       if (!text || !voice || !enabled || !window.speechSynthesis) return;
       window.speechSynthesis.cancel();
       const s = new SpeechSynthesisUtterance(text);
+      // Device voices are optional. Prefer a female voice for Mara when the
+      // operating system supplies one; subtitles and casting do not depend on it.
+      if (speaker === "MARA VOSS") {
+        const female = window.speechSynthesis
+          .getVoices()
+          .find((v) =>
+            /Samantha|Victoria|Zira|Hazel|Susan|Serena|Moira|Tessa|Karen|Aria|Jenny|English Female/i.test(
+              v.name,
+            ),
+          );
+        if (female) s.voice = female;
+      }
       s.rate = 0.92;
       s.pitch = 1;
       s.volume = 0.8;

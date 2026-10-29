@@ -10,6 +10,7 @@ import {
   activate,
   canEscape,
   required,
+  secureFloor,
 } from "../engines/midnight/state.js";
 import { getProblem } from "../math/bank.js";
 import { progressFor, submit } from "../math/guided-solutions.js";
@@ -34,6 +35,14 @@ test("3D Tower descends all 21 floors, solves 9 required and 3 optional systems,
     const gates = tower.gates.filter((g) => g.floor === i);
     if (gates.some((g) => !g.optional) && i < 20)
       assert.ok(travelBlock(s, i + 1));
+    if (i === 1) {
+      assert.ok(travelBlock(s, 2));
+      assert.equal(secureFloor(s, "receptionSecured"), true);
+    }
+    if (i === 2) {
+      assert.ok(travelBlock(s, 3));
+      assert.equal(secureFloor(s, "routeReleased"), true);
+    }
     if (i === 4) {
       assert.ok(travelBlock(s, 5));
       s.collected = ["4:0", "4:1", "4:2"];
@@ -61,6 +70,7 @@ test("lifts and the maintenance shaft cannot bypass math or mandatory story; fre
   assert.ok(travelBlock(s, 2, "lift", "A"));
   assert.equal(travel(s, 1, "lift", "A"), null);
   s.seen.push("welcome");
+  assert.equal(secureFloor(s, "receptionSecured"), true);
   assert.equal(travel(s, 2, "lift", "A"), null);
   s.floor = 6;
   assert.ok(travelBlock(s, 8, "lift", "B"));

@@ -14,12 +14,12 @@ The stage sequence reserves Tower 1 → Interlude 1 → Tower 2 → … → Inte
 
 - Eighteen above-ground floors plus B1–B3. The goal is to reach the B3 override and return to the lobby, not finish at B3.
 - The twelve source math sockets include optional supplies, a side classroom and an emergency battery. This implementation counts **nine required and three optional** panels.
-- Public Lift A serves 18–10. Research Lift B serves 16, 14, 12, 10, 8, 6, 4, 2 and B1, after power restoration. Freight Lift C serves 8, 4, 1 and B2 after the optional power allocation. B3 has an explicit service-stair connection to B2; the freight lift does not invent an unlisted B3 stop.
+- Public Lift A serves 18–10. Research Lift B serves 16, 14, 12, 10, 8, 6, 4, 2 and B1, after power restoration. The 3D layout now uses two continuous enclosed fire stairs and fixed lift shafts; the decorative escalators are removed. Freight Lift C serves 8, 4, 1 and B2 after the optional power allocation. B3 has an explicit service-stair connection to B2; the freight lift does not invent an unlisted B3 stop.
 - The optional maintenance shortcut consistently connects Floor 8 to Floor 6.
 - Lighting remains legible regardless of optional supplies. Power allocation can enable freight or clear lower patrols through ventilation; the mutually exclusive allocations cannot accumulate beyond the ten-unit budget.
 - Action pauses at every formal math panel. The document's escalating danger after wrong answers and wrong-answer bypass are not implemented. Students can leave and return, but required mathematical work still gates completion.
 - The battery gives escape protection rather than bypassing a required math assessment.
-- Guidebot and researcher choices persist. The researcher follows visually; this is not independent escort AI. Skitters and Guidebots patrol and can be stunned; they do not yet navigate the transport graph themselves.
+- Guidebot and researcher choices persist. The researcher follows visually; this is not independent escort AI. Human-proportioned shadowed figures replace spiders and hostile Guidebots in the 3D game. Directed pistol fire and a short frontal shove create escape opportunities. Enemies do not navigate the transport graph themselves.
 - Q.E.D. is museum lore only in Tower 1. Its later rescue and the next adventures are deferred.
 
 ## Math and story remain separate

@@ -842,3 +842,59 @@ dialog h2 {
     max-width: 100%;
   }
 }
+
+.combat-status {
+  position: absolute;
+  top: 146px;
+  left: 34px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 10px;
+  letter-spacing: 0.13em;
+  color: #b1c6ba;
+  text-shadow: 0 2px 5px #000;
+}
+#weapon-status[data-ready="false"] {
+  color: #c8b995;
+}
+#threat-status {
+  color: #8fa1aa;
+}
+#threat-status[data-alert="true"] {
+  color: #d8a69a;
+}
+#controls {
+  max-width: calc(100vw - 50px);
+  font-size: 10px;
+}
+#controls b {
+  padding: 0 4px;
+}
+#prompt {
+  white-space: normal;
+  text-align: center;
+  max-width: 90vw;
+  width: max-content;
+}
+@media (max-width: 700px) {
+  .combat-status {
+    top: 156px;
+    left: 18px;
+    font-size: 9px;
+  }
+  #touch .touch-actions {
+    max-width: 145px;
+  }
+  .touch-actions button {
+    min-width: 62px;
+    font-size: 11px;
+    padding: 9px 7px;
+  }
+  .objective {
+    bottom: 190px;
+  }
+  #prompt {
+    bottom: 42%;
+  }
+}

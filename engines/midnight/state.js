@@ -77,8 +77,18 @@ export function restoreState(value) {
     "supplies",
     "battery",
     "sculpture",
+    "receptionSecured",
+    "routeReleased",
   ];
   for (const flag of validFlags) s.flags[flag] = value.flags?.[flag] === true;
+  // Saves from before the opening rework have already passed these rooms.
+  if (
+    value.flags?.receptionSecured === undefined &&
+    s.visited.some((i) => i > 1)
+  )
+    s.flags.receptionSecured = true;
+  if (value.flags?.routeReleased === undefined && s.visited.some((i) => i > 2))
+    s.flags.routeReleased = true;
   if (s.flags.freight) s.flags.ventilation = false;
   s.flags.battery = s.flags.battery && s.solved.includes("battery");
   s.flags.supplies = s.flags.supplies && s.solved.includes("supplies");
@@ -150,6 +160,10 @@ export function travelBlock(s, destination, kind = "stairs", liftId = null) {
   }
   if (destination > s.floor && !s.escape) {
     for (let i = s.floor; i < destination; i++) {
+      if (i === 1 && !s.flags.receptionSecured)
+        return "Seal the roof stairwell at the reception security desk first.";
+      if (i === 2 && !s.flags.routeReleased)
+        return "Use the emergency badge to release the service stairs first.";
       const gate = tower.gates.find(
         (g) => g.floor === i && !g.optional && !s.solved.includes(g.id),
       );
@@ -168,7 +182,15 @@ export function travel(s, destination, kind = "stairs", liftId = null) {
   const reason = travelBlock(s, destination, kind, liftId);
   if (reason) return reason;
   s.floor = destination;
-  s.position = { x: -8, z: 7 };
+  if (kind === "lift") {
+    const lift = tower.lifts.find((l) => l.id === liftId);
+    s.position = { x: lift.position[0], z: lift.position[1] + 1.6 };
+  } else if (kind === "stairs") {
+    s.position =
+      liftId === "A"
+        ? { x: -9, z: destination === 0 ? 7 : 7.5 }
+        : { x: destination === 0 ? 8 : 9, z: -6.3 };
+  } else s.position = { x: 10, z: 1.5 };
   if (!s.visited.includes(destination)) s.visited.push(destination);
   return null;
 }
@@ -192,4 +214,16 @@ export function canEscape(s) {
   return (
     s.floor === 17 && s.escape && required.every((g) => s.solved.includes(g.id))
   );
+}
+
+export function secureFloor(s, id) {
+  if (id === "receptionSecured" && s.floor === 1) {
+    s.flags.receptionSecured = true;
+    return true;
+  }
+  if (id === "routeReleased" && s.floor === 2 && s.flags.receptionSecured) {
+    s.flags.routeReleased = true;
+    return true;
+  }
+  return false;
 }

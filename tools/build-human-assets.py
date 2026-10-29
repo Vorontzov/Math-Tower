@@ -7,16 +7,26 @@ import bpy
 from pathlib import Path
 from mathutils import Vector, Quaternion
 
-if "--" not in sys.argv or len(sys.argv[sys.argv.index("--") + 1 :]) != 2:
-    raise SystemExit("Usage: blender -b --python tools/build-human-assets.py -- ROCKETBOX_CHECKOUT OUTPUT_DIR")
+if "--" not in sys.argv or len(sys.argv[sys.argv.index("--") + 1 :]) not in (2, 3):
+    raise SystemExit(
+        "Usage: blender -b --python tools/build-human-assets.py -- ROCKETBOX_CHECKOUT OUTPUT_DIR [ACTOR_NAME]"
+    )
 args = sys.argv[sys.argv.index("--") + 1 :]
 BASE = Path(args[0]) / "Assets"
 OUT = Path(args[1])
 OUT.mkdir(parents=True, exist_ok=True)
-for ident, out in [("02", "explorer"), ("03", "researcher")]:
+for gender, ident, out, target_height in [
+    ("Male", "02", "explorer", 2.05),
+    ("Male", "03", "researcher", 2.05),
+    ("Female", "01", "mara", 1.90),
+]:
+    if len(args) == 3 and out != args[2]:
+        continue
+    avatar = f"{gender}_Adult_{ident}"
+    motion = gender[0].lower()
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    src = BASE / f"Avatars/Adults/Male_Adult_{ident}"
-    bpy.ops.import_scene.fbx(filepath=str(src / f"Export/Male_Adult_{ident}.fbx"))
+    src = BASE / f"Avatars/Adults/{avatar}"
+    bpy.ops.import_scene.fbx(filepath=str(src / f"Export/{avatar}.fbx"))
     rig = next(o for o in bpy.data.objects if o.type == "ARMATURE")
     actorObjects = set(bpy.data.objects)
     meshes = [o for o in actorObjects if o.type == "MESH"]
@@ -27,7 +37,8 @@ for ident, out in [("02", "explorer"), ("03", "researcher")]:
     for o in meshes:
         o.animation_data_clear()
     # Explicit PBR reconstruction: FBX's legacy diffuse multipliers blacken skin.
-    for mat in bpy.data.materials:
+    # Renaming Blender data reorders its collection; snapshot before iterating.
+    for mat in list(bpy.data.materials):
         mat.use_nodes = True
         nodes = mat.node_tree.nodes
         nodes.clear()
@@ -68,9 +79,9 @@ for ident, out in [("02", "explorer"), ("03", "researcher")]:
     restLocation = rig.location.copy()
     clips = []
     for name, folder, file in [
-        ("Idle", "static", "m_idle_neutral_01"),
-        ("Run", "xy", "m_run_neutral"),
-        ("Walk", "xy", "m_walk_neutral"),
+        ("Idle", "static", f"{motion}_idle_neutral_01"),
+        ("Run", "xy", f"{motion}_run_neutral"),
+        ("Walk", "xy", f"{motion}_walk_neutral"),
     ]:
         before = set(bpy.data.objects)
         bpy.ops.import_scene.fbx(
@@ -171,7 +182,7 @@ for ident, out in [("02", "explorer"), ("03", "researcher")]:
     bpy.context.view_layer.update()
     points = [o.matrix_world @ Vector(v) for o in meshes for v in o.bound_box]
     height = max(p.z for p in points) - min(p.z for p in points)
-    root.scale = (2.05 / height,) * 3
+    root.scale = (target_height / height,) * 3
     bpy.context.view_layer.update()
     points = [o.matrix_world @ Vector(v) for o in meshes for v in o.bound_box]
     hips = rig.matrix_world @ rig.pose.bones["Bip01 Pelvis"].head
@@ -179,8 +190,8 @@ for ident, out in [("02", "explorer"), ("03", "researcher")]:
     root.location.y -= hips.y
     root.location.z -= min(p.z for p in points)
     root["forward"] = "+Z"
-    root["heightMetres"] = 2.05
-    root["source"] = "Microsoft Rocketbox Male_Adult_" + ident
+    root["heightMetres"] = target_height
+    root["source"] = "Microsoft Rocketbox " + avatar
     rig.animation_data.action = clips[0]
     for clip in clips:
         clip.use_fake_user = True

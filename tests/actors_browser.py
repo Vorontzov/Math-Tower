@@ -19,7 +19,7 @@ server = subprocess.Popen(
 )
 try:
     port = int(server.stdout.readline().split("port ")[1].split(";")[0])
-    url = f"http://127.0.0.1:{port}/Math-Tower/midnight/?v=0.3.1"
+    url = f"http://127.0.0.1:{port}/Math-Tower/midnight/?v=0.4.0"
     with sync_playwright() as p:
         browser = p.chromium.launch(
             executable_path=os.environ.get("CHROMIUM_PATH") or shutil.which("chromium"),
@@ -45,6 +45,9 @@ try:
             )
 
         page.route("**/engines/midnight/game.js*", instrument)
+        page.add_init_script(
+            "const s=sessionStorage.getItem('actor-checkpoint');if(s){localStorage.setItem('mathTower.midnight.tower1.v2',s);sessionStorage.removeItem('actor-checkpoint');}"
+        )
         page.goto(url)
         page.locator("#begin").click()
         expect(page.locator("#line")).to_contain_text(
@@ -84,13 +87,36 @@ try:
             assert result["dot"] > 0.8, (keys, result)
             assert result["name"] == "Bip01_Head"
         page.screenshot(path="/tmp/math-tower-human-play.png")
+        state = {
+            "version": 2,
+            "seed": 14,
+            "floor": 19,
+            "bankId": "readiness",
+            "position": {"x": -8, "z": 7},
+            "seen": [],
+            "visited": list(range(20)),
+            "flags": {},
+        }
+        page.evaluate(
+            "s=>sessionStorage.setItem('actor-checkpoint',JSON.stringify(s))", state
+        )
+        page.reload()
+        page.locator("#continue").click()
+        expect(page.locator("#speaker")).to_have_text("MARA VOSS", timeout=90000)
+        casting = page.evaluate(
+            """()=>{let mara=null,researcher=null;__actorTest.scene.traverse(o=>{if(o.userData.role==='mara')mara=o;if(o.userData.role==='researcher')researcher=o;});let source='';mara?.userData.human.model.traverse(o=>{if(o.userData.source)source=o.userData.source;});return {mara:!!mara,researcher:!!researcher,source};}"""
+        )
+        assert casting["mara"] and casting["researcher"], casting
+        assert "Female_Adult_01" in casting["source"], casting
+        page.screenshot(path="/tmp/math-tower-mara-recording.png")
+        assert any("/mara.glb" in r for r in requests)
         assert not errors, errors
         assert any("/explorer.glb" in r for r in requests)
         assert any("/researcher.glb" in r for r in requests)
         assert not any("/operative.glb" in r for r in requests)
         browser.close()
         print(
-            "PASS: visible human intro, civilian assets, real keyboard movement faces forward in all eight directions"
+            "PASS: visible human intro, civilian assets, real keyboard movement faces forward in all eight directions; Mara Voss has a separate female model in the recording"
         )
 finally:
     server.terminate()

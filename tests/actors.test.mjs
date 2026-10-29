@@ -55,7 +55,7 @@ function visibleBounds(root) {
   return box;
 }
 test("shipped human faces point along movement in all eight directions, in idle and run", async () => {
-  for (const name of ["explorer", "researcher"]) {
+  for (const name of ["explorer", "researcher", "mara"]) {
     const { scene, animations } = await geometryAsset(name),
       mixer = new T.AnimationMixer(scene);
     for (const animation of ["Idle", "Run", "Walk"]) {
@@ -91,7 +91,7 @@ test("shipped human faces point along movement in all eight directions, in idle 
     const bounds = visibleBounds(scene),
       height = bounds.getSize(new T.Vector3()).y;
     assert.ok(
-      height > 1.9 && height < 2.2,
+      height > (name === "mara" ? 1.8 : 1.9) && height < 2.2,
       `${name} has human physical scale (${height})`,
     );
     assert.ok(Math.abs(bounds.min.y) < 0.15, `${name} stands on the floor`);
@@ -108,11 +108,14 @@ test("shipped human faces point along movement in all eight directions, in idle 
     mixer.clipAction(run).play();
     mixer.setTime(run.duration * 0.2);
     const first = knee.quaternion.clone();
-    mixer.setTime(run.duration * 0.65);
-    assert.ok(
-      first.angleTo(knee.quaternion) > 0.15,
-      `${name} run actually articulates the legs`,
-    );
+    let motion = 0;
+    // Sample the whole stride: symmetric phases can happen to have the same
+    // knee angle in a different actor's native run cycle.
+    for (let i = 0; i < 10; i++) {
+      mixer.setTime((run.duration * i) / 10);
+      motion = Math.max(motion, first.angleTo(knee.quaternion));
+    }
+    assert.ok(motion > 0.3, `${name} run actually articulates the legs`);
   }
 });
 test("large spiders have eight independently articulated legs and grounded feet", () => {

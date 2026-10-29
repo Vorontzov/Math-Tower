@@ -16,7 +16,7 @@ KEY='mathTower.midnight.tower1.v2'
 # Generate legitimate learning records through the actual bank and checked-step APIs.
 fixtures=json.loads(subprocess.check_output(['node','--input-type=module','-e',r'''
 import {midnightTower as tower} from './towers/tower-0001.js';
-import {freshState,activate} from './engines/midnight/state.js';
+import {freshState,activate,secureFloor} from './engines/midnight/state.js';
 import {getProblem} from './math/bank.js';
 import {progressFor,submit} from './math/guided-solutions.js';
 const s=freshState(91542),states=[];
@@ -24,6 +24,7 @@ for(let floor=0;floor<21;floor++){
  s.floor=floor;s.position={x:-8,z:7};s.visited=Array.from({length:floor+1},(_,i)=>i);
  states.push(JSON.parse(JSON.stringify(s)));
  const entry=tower.rooms[floor].entry;if(entry)s.seen.push(entry);
+ if(floor===1)secureFloor(s,'receptionSecured');if(floor===2)secureFloor(s,'routeReleased');
  if(floor===4)s.collected=['4:0','4:1','4:2'];
  for(const g of tower.gates.filter(g=>g.floor===floor)){const p=getProblem(s,tower.id,g),v=progressFor(s,g.id,p);v.guided=true;for(const step of p.steps)submit(p,v,step.answer);activate(s,g.id);}
 }
@@ -57,8 +58,9 @@ try:
             if page.locator('#skip').is_visible():page.locator('#skip').click()
             expect(page.locator('#hud')).to_be_visible()
 
-        state=copy.deepcopy(fixtures['fresh']);state['seen']=['arrival'];state['position']={'x':5,'z':-6.4};checkpoint(state)
-        page.keyboard.press('e');expect(page.locator('#math')).to_be_visible();expect(page.locator('#math')).to_contain_text('WORLD PAUSED')
+        state=copy.deepcopy(fixtures['fresh']);state['seen']=['arrival'];state['position']={'x':5,'z':-6.4};state['math']={'roof':{'draft':'e'}};checkpoint(state)
+        page.keyboard.down('e');expect(page.locator('#math')).to_be_visible();expect(page.locator('#answer')).to_have_value('');page.keyboard.down('e');expect(page.locator('#answer')).to_have_value('');page.keyboard.up('e');expect(page.locator('#math')).to_contain_text('WORLD PAUSED')
+        page.locator('#answer').fill('12');page.locator('#leave-math').click();page.keyboard.press('e');expect(page.locator('#answer')).to_have_value('12');page.locator('#answer').fill('')
         q=page.evaluate('''async key=>{const {getProblem}=await import('../math/bank.js');const {midnightTower}=await import('../towers/tower-0001.js');return getProblem(JSON.parse(localStorage.getItem(key)),midnightTower.id,midnightTower.gates[0]);}''',KEY)
         before=page.locator('#hearts').inner_text();page.locator('#answer').fill('999999');page.locator('#check').click();expect(page.locator('#feedback')).to_contain_text('no penalty');assert page.locator('#hearts').inner_text()==before
         page.locator('#help').click();expect(page.locator('#step-count')).to_have_text('STEP 1 OF 2')

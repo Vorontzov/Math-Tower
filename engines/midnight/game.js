@@ -3,7 +3,9 @@ import { createWorld } from "./world.js";
 import { buildRoom, buildCampus } from "./rooms.js";
 import {
   animateExplorer,
-  animateSkitter,
+  animatePresence,
+  equipStunGun,
+  poseCombat,
   faceMovement,
   explorer,
   box,
@@ -25,8 +27,19 @@ import {
   travel,
   activate,
   required,
+  secureFloor,
   canEscape,
 } from "./state.js";
+
+import {
+  traceShot,
+  shoveTarget,
+  updateThreat,
+  moveBody,
+  STUN_RANGE,
+  STUN_COOLDOWN,
+  rayWall,
+} from "./combat.js";
 
 const $ = (id) => document.getElementById(id),
   keys = new Set(),
@@ -62,10 +75,11 @@ function start() {
     toastClock = 0,
     vy = 0,
     protection = 0,
-    pulseCooldown = 0,
+    shotCooldown = 0,
     shoveCooldown = 0,
     companionCooldown = 0,
-    pulseTime = 0,
+    shotTime = 0,
+    noise = null,
     priorMode = "play",
     question = null,
     progress = null,
@@ -75,7 +89,35 @@ function start() {
   const cameraTarget = new T.Vector3(),
     lookTarget = new T.Vector3(),
     look = new T.Vector3(0, 2, 0);
-  room = buildRoom(world, 4, freshState(1));
+  equipStunGun(world.player);
+  const shotLine = new T.Line(
+    new T.BufferGeometry().setFromPoints([new T.Vector3(), new T.Vector3()]),
+    new T.LineBasicMaterial({
+      color: "#d6edee",
+      transparent: true,
+      opacity: 0,
+    }),
+  );
+  const aimLine = new T.Line(
+    new T.BufferGeometry().setFromPoints([new T.Vector3(), new T.Vector3()]),
+    new T.LineBasicMaterial({
+      color: "#a7c1b5",
+      transparent: true,
+      opacity: 0.36,
+    }),
+  );
+  const aimMark = new T.Mesh(
+    new T.RingGeometry(0.12, 0.17, 24),
+    new T.MeshBasicMaterial({
+      color: "#adc9b9",
+      side: T.DoubleSide,
+      transparent: true,
+      opacity: 0.75,
+    }),
+  );
+  aimMark.rotation.x = -Math.PI / 2;
+  world.scene.add(shotLine, aimLine, aimMark);
+  room = buildRoom(world, 1, freshState(1));
   world.player.position.set(4, 0, 5);
   world.player.rotation.y = 0.6;
   $("reduced-motion").checked = reduced;
@@ -115,6 +157,8 @@ function start() {
   function setMode(value) {
     mode = value;
     keys.clear();
+    aimLine.visible = aimMark.visible = value === "play";
+    shotLine.visible = value === "play";
     $("title-screen").hidden = value !== "title";
     $("hud").hidden = !["play", "math", "pause", "choice"].includes(value);
     $("cinema").hidden = !["film", "travel"].includes(value);
@@ -131,8 +175,14 @@ function start() {
       return save.floor === 17
         ? "The campus doors are open. Escape through the lobby."
         : "Return to the lobby on Floor 1. Use stairs or restored freight power.";
+    if (save.floor === 0 && !save.solved.includes("roof"))
+      return "Someone is on the roof. Reach the access terminal and get inside.";
+    if (save.floor === 1 && !save.flags.receptionSecured)
+      return "Reach the security desk. Seal the roof stairwell and recover the emergency badge.";
+    if (save.floor === 2 && !save.flags.routeReleased)
+      return "Avoid the patrols. Use the badge on the emergency release beside the east corridor.";
     if (room.def.requiredCollect && save.collected.length < 3)
-      return "Recover three memory fragments. Jump, shove or stun the Skitters.";
+      return "Recover the three recorder cartridges. Face the pursuers before firing.";
     const gate = currentGate(save);
     if (gate) return "Restore " + gate.label.toLowerCase() + ".";
     if (
@@ -160,6 +210,7 @@ function start() {
     $("inventory").textContent = [
       save.collected.length ? `${save.collected.length}/3 fragments` : "",
       save.flags.battery ? "Battery shield" : "",
+      save.flags.receptionSecured ? "Emergency badge" : "",
       save.flags.researcher ? "Researcher with you" : "",
     ]
       .filter(Boolean)
@@ -189,8 +240,14 @@ function start() {
       0,
       position?.z ?? (index === 0 ? 4 : 7),
     );
+    // New structural walls may overlap a position saved in an older layout.
+    if (blocked(world.player.position.x, world.player.position.z, 0))
+      world.player.position.set(index === 0 ? -6 : -8, 0, index === 0 ? 4 : 7);
     world.player.rotation.y = 0.6;
     vy = 0;
+    shotTime = 0;
+    noise = null;
+    shotLine.material.opacity = 0;
     protection = save.flags.battery && save.escape ? 8 : 2.5;
     if (save.flags.researcher && index !== 15) {
       companion = explorer();
@@ -203,7 +260,9 @@ function start() {
       world.scene.add(companion);
     }
     if (index === 0)
-      world.roofDoor.leaf.position.y = save.solved.includes("roof") ? 6.2 : 2;
+      world.roofDoors.forEach(
+        (d) => (d.leaf.position.y = save.solved.includes("roof") ? 3.65 : 1.2),
+      );
     updateHud();
   }
   function offerEntry() {
@@ -322,6 +381,10 @@ function start() {
     sound.silence();
     world.player.visible = true;
     world.heli.position.y = 0.5;
+    world.heli.rotation.z = 0;
+    world.heli.userData.damaged = true;
+    world.facadeLight.emissiveIntensity = 0.05;
+    world.renderer.toneMappingExposure = 1.08;
     if (replay) {
       loadFloor(save.floor, save.position);
       if (save.complete) showComplete();
@@ -340,6 +403,11 @@ function start() {
       return;
     }
     world.player.position.copy(originalPosition);
+    room.enemies.forEach((e) => {
+      e.visible = !e.userData.disabled;
+      if (e.userData.home)
+        e.position.set(e.userData.home.x, 0, e.userData.home.z);
+    });
     room.features.memoryActors?.forEach((p) => (p.visible = false));
     if (room.features.watcher && save.floor === 13)
       room.features.watcher.visible = false;
@@ -351,9 +419,13 @@ function start() {
     updateHud();
     persist();
     $("world").focus();
+    if (name === "arrival")
+      toast(
+        "Face the figure and press X to fire. Q turns around. Reach the door terminal; math pauses danger.",
+      );
     if (name === "skitters")
       toast(
-        "Three memory fragments are scattered through the gallery. Space jumps; X stuns; C shoves.",
+        "Recover the three recorders. X fires ahead; Q turns around; C pushes an opponent in arm’s reach.",
       );
     if (name === "escape")
       toast(
@@ -369,8 +441,11 @@ function start() {
       film.announced = film.index;
       $("speaker").textContent = shot.speaker;
       $("line").textContent = shot.line;
-      sound.say(shot.line);
-      if (["dent", "alarm", "swarm"].includes(shot.action)) sound.tone("hurt");
+      sound.say(shot.line, shot.speaker);
+      if (
+        ["dent", "alarm", "swarm", "blackout", "landing"].includes(shot.action)
+      )
+        sound.tone("hurt");
     }
     film.elapsed += dt;
     const duration = Math.max(
@@ -383,14 +458,48 @@ function start() {
     world.camera.position.copy(cameraTarget);
     look.fromArray(shot.target);
     world.camera.lookAt(look);
-    world.player.visible = !["landing", "approach"].includes(shot.action);
+    world.player.visible = !["landing", "approach", "blackout"].includes(
+      shot.action,
+    );
     animateExplorer(world.player, time, 0, 0, shot.speaker === "THE EXPLORER");
     const features = room.features;
-    if (shot.action === "approach")
+    poseCombat(world.player, time);
+    world.renderer.toneMappingExposure =
+      shot.action === "blackout" ? 0.35 : 1.08;
+    if (film.name === "arrival") {
+      const threat = room.enemies[0];
+      if (threat) {
+        threat.visible = ["roof-threat", "equip", "handoff"].includes(
+          shot.action,
+        );
+        animatePresence(threat, time, 0.15);
+        threat.rotation.y = Math.atan2(
+          -6 - threat.position.x,
+          4 - threat.position.z,
+        );
+      }
+      world.player.userData.weapon.gun.visible = ["equip", "handoff"].includes(
+        shot.action,
+      );
+    } else world.player.userData.weapon.gun.visible = true;
+    if (shot.action === "blackout") {
+      world.facadeLight.emissiveIntensity = 0;
+      world.heli.position.y = 8 - f * 2;
+      world.heli.rotation.z = reduced ? 0 : Math.sin(f * 7) * 0.19;
+    }
+    if (shot.action === "roof-threat") {
+      const e = room.enemies[0];
+      if (e) e.position.z = -5 - f * 0.8;
+    }
+    if (shot.action === "approach") {
+      world.heli.userData.damaged = false;
+      world.facadeLight.emissiveIntensity = 0.5;
       world.heli.position.y = 11 + Math.sin(time) * 0.15;
+    }
     if (shot.action === "landing") {
       world.heli.position.y = 0.5 + (1 - f) * 11;
-      world.heli.rotation.z = Math.sin(f * 20) * (1 - f) * 0.05;
+      world.heli.rotation.z = reduced ? 0 : Math.sin(f * 20) * (1 - f) * 0.14;
+      if (f > 0.8) world.heli.userData.damaged = true;
     }
     if (shot.action === "greeting" && features.robot)
       features.robot.userData.arms[0].rotation.z =
@@ -401,17 +510,16 @@ function start() {
       features.extraNumber.visible = f > 0.3 && f < 0.7;
       features.number.visible = !features.extraNumber.visible;
     }
-    if (shot.action === "skitters" && features.robot) {
-      features.robot.rotation.z = f * 0.9;
-      features.robot.userData.arms[0].rotation.z = Math.sin(time * 8);
+    if (shot.action === "pursuit")
       room.enemies.forEach((e, i) => {
-        e.position.z = -3 + Math.sin(time + i) * 0.3;
-        e.position.y = 0;
-        if (e.userData.kind === "skitter") animateSkitter(e, time, 1);
+        e.rotation.y = Math.atan2(
+          world.player.position.x - e.position.x,
+          world.player.position.z - e.position.z,
+        );
+        animatePresence(e, time, 0.3);
       });
-    }
     if (shot.action === "expand" && features.expansion)
-      features.expansion.scale.z = 1 + f * 0.6;
+      features.expansion.rotation.y = Math.sin(f * Math.PI) * 0.04;
     if (shot.action === "memory" && features.memoryActors)
       features.memoryActors.forEach((p, i) => {
         p.visible = true;
@@ -445,7 +553,7 @@ function start() {
     }
     if (shot.action === "dent" && features.dent) {
       features.dent.scale.y = 0.05 + f * 0.65;
-      features.ceiling.position.y = 5.2 - f * 0.12;
+      features.ceiling.position.y = 2.65 - f * 0.12;
     }
     if (shot.action === "shift" && features.statue) {
       features.statue.visible = f < 0.3 || f > 0.7;
@@ -455,7 +563,7 @@ function start() {
     if (shot.action === "swarm")
       room.enemies.forEach((e, i) => {
         e.position.set(-3 + i * 2.2, 0, -4 + f * 4);
-        if (e.userData.kind === "skitter") animateSkitter(e, time, 1.5);
+        animatePresence(e, time, 0.6);
       });
     if (shot.action === "tower" && campus) {
       const height = f < 0.28 ? 18 : f < 0.52 ? 19 : f < 0.76 ? 22 : 18;
@@ -499,8 +607,28 @@ function start() {
       t.kind === "ladder" ||
       t.kind === "escalator"
     )
-      requestTravel(t.destination, t.kind);
-    else if (t.kind === "lift") openLift(t.id);
+      requestTravel(t.destination, t.kind, t.core || null);
+    else if (t.kind === "stairwell") {
+      const destinations = [save.floor - 1, save.floor + 1].filter(
+        (i) => i >= 0 && i <= 20,
+      );
+      if (destinations.length === 1)
+        requestTravel(destinations[0], "stairs", t.core);
+      else
+        choice(
+          "Fire stair " + t.core,
+          "Enclosed stairs connect the landing directly above and below.",
+          destinations.map((i) => {
+            const reason = travelBlock(save, i);
+            return {
+              label: (i < save.floor ? "Up to " : "Down to ") + floorName(i),
+              disabled: !!reason,
+              reason,
+              action: () => requestTravel(i, "stairs", t.core),
+            };
+          }),
+        );
+    } else if (t.kind === "lift") openLift(t.id);
     else if (t.kind === "exit") {
       if (canEscape(save)) runFilm("ending");
       else toast("The campus doors are sealed. Restore the override in B3.");
@@ -512,8 +640,34 @@ function start() {
       save.flags.sculpture = true;
       room.enemies.forEach((e) => (e.userData.stun = 8));
       sound.tone("pulse");
-      toast("The swinging sculpture scatters the Skitters.");
+      toast(
+        "The counterweight swings across the gallery. The pursuers are staggered — move!",
+      );
       persist();
+    } else if (t.kind === "security") {
+      if (save.flags[t.id]) {
+        toast("The stairwell is isolated. Continue down.");
+        return;
+      }
+      if (!secureFloor(save, t.id)) {
+        toast(
+          "Recover the emergency badge at the Floor 17 security desk first.",
+        );
+        return;
+      }
+      room.enemies.forEach((e) => {
+        e.userData.stun = 1.5;
+        e.userData.windup = e.userData.rush = 0;
+      });
+      // The shutter visibly drops, ending this pursuit and opening the descent.
+      sound.tone("solve");
+      updateHud();
+      persist();
+      toast(
+        t.id === "receptionSecured"
+          ? "Badge recovered. Door sealed behind you. The figure is still on this floor — head down."
+          : "Emergency route released. The alarm distracts the patrol briefly. Take Stair B down.",
+      );
     } else if (t.kind === "record") {
       const record = adventure.objects.find((o) => o.id === t.id);
       choice(record.title, record.text, [
@@ -562,7 +716,7 @@ function start() {
   function objectChoice(id) {
     if (id === "guidebot") {
       if (save.flags.guidebot) {
-        toast("The rescued Guidebot upgraded your pulse range.");
+        toast("The rescued Guidebot increased your stun-pistol range.");
         return;
       }
       choice(
@@ -739,10 +893,13 @@ function start() {
       world.camera.lookAt(p.x, 1.5, p.z);
       ride.car.children[1].position.y = 1.6 + Math.sin(f * 10) * 0.08;
     } else {
-      faceMovement(world.player, 0, -1);
-      animateExplorer(world.player, time, 1);
-      world.player.position.z = p.z - f * 0.6;
-      world.player.position.y = Math.sin(f * Math.PI) * 0.35;
+      const direction = ride.id === "A" ? 1 : -1;
+      faceMovement(world.player, 0, direction);
+      animateExplorer(world.player, time, 0.7);
+      poseCombat(world.player, time);
+      world.player.position.z = p.z + direction * f * 0.7;
+      world.player.position.y =
+        save.floor === 0 ? 0 : (ride.destination > save.floor ? -0.5 : 0.5) * f;
     }
     if (f === 1) finishTravel();
   }
@@ -758,6 +915,9 @@ function start() {
     $("feedback").textContent = "Take your time. The world is paused.";
     $("hint").hidden = true;
     $("hint").textContent = question.hint;
+    // Older builds could persist the opening key itself as a draft. A lone E
+    // is never a valid answer in these numeric banks; keep real typed drafts.
+    if (/^e+$/i.test(progress.draft)) progress.draft = "";
     $("answer").value = progress.draft;
     renderGuide();
     $("math").showModal();
@@ -844,9 +1004,10 @@ function start() {
       const position = world.player.position.clone();
       loadFloor(save.floor, position);
       runFilm("escape");
-    } else if (id === "roof") world.roofDoor.leaf.position.y = 6.2;
+    } else if (id === "roof")
+      world.roofDoors.forEach((d) => (d.leaf.position.y = 3.65));
     else if (id === "lights" && room.features.expansion)
-      room.features.expansion.scale.z = 1.5;
+      room.features.expansion.rotation.y = 0;
     $("world").focus();
   };
 
@@ -857,7 +1018,17 @@ function start() {
     sound.silence();
     persist();
     $("scene-select").replaceChildren(new Option("Choose a scene", ""));
-    for (const name of save.seen) $("scene-select").add(new Option(name, name));
+    for (const name of save.seen)
+      $("scene-select").add(
+        new Option(
+          name === "skitters"
+            ? "Gallery pursuit"
+            : name === "impossible"
+              ? "The conflicting measurements"
+              : name.charAt(0).toUpperCase() + name.slice(1),
+          name,
+        ),
+      );
     $("pause-menu").showModal();
   }
   function resume() {
@@ -918,33 +1089,83 @@ function start() {
       sound.tone("jump");
     }
   }
+  function weaponStatus() {
+    const status = $("weapon-status");
+    status.textContent =
+      shotCooldown > 0
+        ? `STUN PISTOL · charging ${shotCooldown.toFixed(1)}s`
+        : "STUN PISTOL · READY";
+    status.dataset.ready = String(shotCooldown === 0);
+  }
   function attack(close = false) {
-    if (mode !== "play" || (close ? shoveCooldown : pulseCooldown) > 0) return;
-    if (close) shoveCooldown = 0.65;
-    else {
-      pulseCooldown = 1.4;
-      pulseTime = 0.5;
-      world.pulse.position
-        .copy(world.player.position)
-        .add(new T.Vector3(0, 0.6, 0));
+    if (mode !== "play" || (close ? shoveCooldown : shotCooldown) > 0) return;
+    if (close) {
+      shoveCooldown = 0.8;
+      world.player.userData.shoveStart = time;
+      const e = shoveTarget(
+        world.player.position,
+        world.player.rotation.y,
+        room.enemies,
+        room.colliders,
+      );
+      if (e) {
+        const dx = e.position.x - world.player.position.x,
+          dz = e.position.z - world.player.position.z,
+          d = Math.hypot(dx, dz) || 1;
+        e.userData.stun = 1.15;
+        e.userData.windup = e.userData.rush = 0;
+        e.userData.knockback = { x: (dx / d) * 12, z: (dz / d) * 12 };
+        toast("Shoved back. Move away before they recover.");
+        sound.tone("shove");
+      } else toast("Shove missed. Face an opponent within arm’s reach.");
+      return;
     }
-    const range = close ? 2 : save.flags.guidebot ? 5.5 : 4.5;
-    world.player.userData.strikeStart = time;
-    room.enemies.forEach((e) => {
-      if (e.position.distanceTo(world.player.position) < range) {
-        e.userData.stun = close ? 2.5 : 4.5;
-        e.position.add(
-          e.position
-            .clone()
-            .sub(world.player.position)
-            .setY(0)
-            .normalize()
-            .multiplyScalar(0.5),
-        );
-      }
-    });
-    world.player.userData.arms[1].rotation.x = -1.5;
-    sound.tone("pulse");
+    shotCooldown = STUN_COOLDOWN;
+    shotTime = 0.18;
+    world.player.userData.fireStart = time;
+    world.player.userData.aiming = true;
+    poseCombat(world.player, time);
+    world.player.updateMatrixWorld(true);
+    const origin = world.player.userData.weapon.muzzle.getWorldPosition(
+      new T.Vector3(),
+    );
+    // A muzzle close to a wall may not reach through it.
+    const reach = origin.clone().sub(world.player.position).setY(0),
+      span = reach.length();
+    const wall = rayWall(
+      world.player.position,
+      reach.clone().normalize(),
+      span,
+      room.colliders,
+      origin.y,
+    );
+    if (wall < span) {
+      const height = origin.y;
+      origin
+        .copy(world.player.position)
+        .addScaledVector(reach.normalize(), Math.max(0, wall - 0.02))
+        .setY(height);
+    }
+    const hit = traceShot(
+      origin,
+      world.player.rotation.y,
+      room.enemies,
+      room.colliders,
+      save.flags.guidebot ? 10 : STUN_RANGE,
+    );
+    shotLine.geometry.setFromPoints([
+      origin,
+      new T.Vector3(hit.end.x, origin.y, hit.end.z),
+    ]);
+    shotLine.material.opacity = 1;
+    noise = { x: world.player.position.x, z: world.player.position.z };
+    if (hit.enemy) {
+      hit.enemy.userData.stun = 4;
+      hit.enemy.userData.windup = hit.enemy.userData.rush = 0;
+      toast("Direct hit. Four seconds to get clear.");
+    } else toast("Shot missed or blocked. Aim at the figure before firing.");
+    sound.tone("stun");
+    weaponStatus();
   }
   function press(code) {
     if (mode === "play") {
@@ -952,13 +1173,26 @@ function start() {
       if (code === "KeyX") attack();
       if (code === "KeyC") attack(true);
       if (code === "KeyE") interact();
+      if (code === "KeyQ") {
+        world.player.rotation.y += Math.PI;
+        world.player.userData.turnUntil = time + 0.5;
+        world.player.userData.aiming = true;
+      }
     }
     if (code === "KeyP" || code === "Escape") {
       if (mode === "pause") resume();
       else pause();
     }
   }
+  let openingInteractHeld = false;
   document.addEventListener("keydown", (e) => {
+    // Opening a dialog transfers focus during this very keydown. Consume its
+    // default text insertion and any held-key repeats until the physical keyup.
+    if (e.code === "KeyE" && openingInteractHeld) {
+      e.preventDefault();
+      return;
+    }
+
     if (
       ["INPUT", "SELECT", "TEXTAREA"].includes(e.target.tagName) ||
       ["math", "choice", "complete", "title"].includes(mode)
@@ -970,10 +1204,17 @@ function start() {
       )
     )
       e.preventDefault();
+    if (e.code === "KeyE" && mode === "play") {
+      e.preventDefault();
+      openingInteractHeld = true;
+    }
     if (!keys.has(e.code)) press(e.code);
     keys.add(e.code);
   });
-  document.addEventListener("keyup", (e) => keys.delete(e.code));
+  document.addEventListener("keyup", (e) => {
+    keys.delete(e.code);
+    if (e.code === "KeyE") openingInteractHeld = false;
+  });
   document.querySelectorAll("[data-key]").forEach((button) => {
     button.addEventListener("pointerdown", (e) => {
       e.preventDefault();
@@ -984,7 +1225,38 @@ function start() {
     for (const event of ["pointerup", "pointercancel", "lostpointercapture"])
       button.addEventListener(event, () => keys.delete(button.dataset.key));
   });
+  const aimRay = new T.Raycaster(),
+    ground = new T.Plane(new T.Vector3(0, 1, 0), 0),
+    aimPoint = new T.Vector3();
+  function aimAtPointer(e) {
+    if (mode !== "play" || e.pointerType !== "mouse") return;
+    const rect = $("world").getBoundingClientRect();
+    aimRay.setFromCamera(
+      new T.Vector2(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        (-(e.clientY - rect.top) / rect.height) * 2 + 1,
+      ),
+      world.camera,
+    );
+    if (aimRay.ray.intersectPlane(ground, aimPoint)) {
+      faceMovement(
+        world.player,
+        aimPoint.x - world.player.position.x,
+        aimPoint.z - world.player.position.z,
+      );
+      world.player.userData.aiming = true;
+    }
+  }
+  $("world").addEventListener("pointermove", aimAtPointer);
+  $("world").addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse" && e.button === 0 && mode === "play") {
+      e.preventDefault();
+      aimAtPointer(e);
+      attack();
+    }
+  });
   window.addEventListener("blur", () => {
+    openingInteractHeld = false;
     keys.clear();
     pause();
   });
@@ -1035,15 +1307,19 @@ function start() {
       toast(
         "You recovered at the stairs. Your mathematics, fragments and choices are safe.",
       );
-    } else toast("Space jumps over danger. X stuns; C shoves at close range.");
+    } else
+      toast(
+        "Keep your distance. Face the pursuer, then fire X. Q turns around; C pushes them back.",
+      );
     updateHud();
     persist();
   }
   function simulation(dt) {
-    pulseCooldown = Math.max(0, pulseCooldown - dt);
+    shotCooldown = Math.max(0, shotCooldown - dt);
     shoveCooldown = Math.max(0, shoveCooldown - dt);
     companionCooldown = Math.max(0, companionCooldown - dt);
     protection = Math.max(0, protection - dt);
+    weaponStatus();
     const p = world.player.position;
     let x =
         Number(keys.has("KeyD") || keys.has("ArrowRight")) -
@@ -1060,8 +1336,16 @@ function start() {
       dz = (-x * 0.565 + z * 0.825) * 5.3 * dt;
     const beforeX = p.x,
       beforeZ = p.z;
-    if (!blocked(p.x + dx, p.z, p.y)) p.x += dx;
-    if (!blocked(p.x, p.z + dz, p.y)) p.z += dz;
+    const turnLock = time < (world.player.userData.turnUntil ?? -100);
+    const aiming = keys.has("ShiftLeft") || keys.has("ShiftRight") || turnLock;
+    if (aiming) {
+      if (!turnLock) faceMovement(world.player, dx, dz);
+      world.player.userData.aiming = true;
+    } else {
+      if (!blocked(p.x + dx, p.z, p.y)) p.x += dx;
+      if (!blocked(p.x, p.z + dz, p.y)) p.z += dz;
+      if (len) world.player.userData.aiming = false;
+    }
     const movedX = p.x - beforeX,
       movedZ = p.z - beforeZ;
     faceMovement(world.player, movedX, movedZ);
@@ -1074,6 +1358,8 @@ function start() {
       dt ? Math.hypot(movedX, movedZ) / (dt * 5.3) : 0,
       p.y,
     );
+    poseCombat(world.player, time);
+    world.player.userData.weapon.gun.visible = true;
     world.player.visible = true;
     room.collectibles.forEach(({ group, id }) => {
       if (
@@ -1085,47 +1371,37 @@ function start() {
         sound.tone("shard");
         toast(
           save.collected.length === 3
-            ? "All three fragments recovered. The route to the children’s gallery is clear."
+            ? "All three recorders recovered. The route to the education wing is clear."
             : `Memory fragment ${save.collected.length} of 3 recovered.`,
         );
         updateHud();
         persist();
       }
     });
-    room.enemies.forEach((e, i) => {
-      const s = e.userData;
-      if (s.disabled) return;
-      s.stun = Math.max(0, s.stun - dt);
-      if (s.stun) {
-        e.rotation.z = Math.sin(time * 8) * 0.035;
-        if (s.kind === "skitter") animateSkitter(e, time, 0, false, true);
-        return;
-      }
-      e.rotation.z = 0;
-      s.phase += dt;
-      const direction = p.clone().sub(e.position).setY(0),
-        distance = direction.length();
-      e.rotation.y = Math.atan2(direction.x, direction.z);
-      const phase = s.phase % 3.8,
-        windup = phase > 2.25 && phase < 3,
-        charge = phase >= 3,
-        speed = windup ? 0 : charge ? 5 : save.escape ? 1.5 : 1;
-      if (distance < 11 && distance > 0.6) {
-        direction.normalize().multiplyScalar(dt * speed);
-        const nx = e.position.x + direction.x,
-          nz = e.position.z + direction.z;
-        if (!blocked(nx, e.position.z, 0)) e.position.x = nx;
-        if (!blocked(e.position.x, nz, 0)) e.position.z = nz;
-      }
-      e.position.y = 0;
-      if (s.kind === "skitter")
-        animateSkitter(e, time, distance < 11 ? speed : 0, windup);
-      if (s.kind === "guidebot")
-        e.userData.arms.forEach(
-          (a, j) => (a.rotation.z = Math.sin(time * 3 + j) * 0.3),
-        );
-      if (distance < (s.contactRadius || 0.9) && p.y < 0.7) hurt();
+    let pursuing = 0;
+    room.enemies.forEach((e) => {
+      const motion = updateThreat(e, p, dt, room.colliders, {
+        noise,
+        early: save.floor < 4,
+        escape: save.escape,
+      });
+      if (e.userData.disabled) return;
+      animatePresence(e, time, motion.speed);
+      if (
+        e.userData.state === "pursuing" ||
+        e.userData.state === "winding" ||
+        e.userData.state === "rushing"
+      )
+        pursuing++;
+      if (motion.attack) hurt();
     });
+    noise = null;
+    $("threat-status").textContent = pursuing
+      ? `PURSUIT · ${pursuing} ${pursuing === 1 ? "figure" : "figures"}`
+      : room.enemies.some((e) => !e.userData.disabled)
+        ? "FOOTSTEPS NEARBY"
+        : "AREA QUIET";
+    $("threat-status").dataset.alert = String(pursuing > 0);
     room.features.steam?.forEach((s) => {
       if (
         s.visible &&
@@ -1139,7 +1415,17 @@ function start() {
         distance = companion.position.distanceTo(target);
       if (distance > 1) {
         const before = companion.position.clone();
-        companion.position.lerp(target, Math.min(1, dt * 2));
+        const direction = target
+          .clone()
+          .sub(companion.position)
+          .setY(0)
+          .normalize();
+        moveBody(
+          companion,
+          direction.x * Math.min(distance, dt * 5),
+          direction.z * Math.min(distance, dt * 5),
+          room.colliders,
+        );
         faceMovement(
           companion,
           companion.position.x - before.x,
@@ -1153,9 +1439,22 @@ function start() {
     const t = target();
     $("prompt").hidden = !t;
     if (t) $("prompt").querySelector("span").textContent = t.label;
-    pulseTime = Math.max(0, pulseTime - dt);
-    world.pulse.material.opacity = pulseTime * 1.7;
-    world.pulse.scale.setScalar(1 + (1 - pulseTime / 0.5) * 4);
+    shotTime = Math.max(0, shotTime - dt);
+    shotLine.material.opacity = shotTime / 0.18;
+    const aim = traceShot(
+      { x: p.x, y: 1.25, z: p.z },
+      world.player.rotation.y,
+      room.enemies,
+      room.colliders,
+      save.flags.guidebot ? 10 : STUN_RANGE,
+    );
+    const direction = new T.Vector3(aim.direction.x, 0, aim.direction.z);
+    aimLine.geometry.setFromPoints([
+      new T.Vector3(p.x, 0.06, p.z).addScaledVector(direction, 0.65),
+      new T.Vector3(aim.end.x, 0.06, aim.end.z),
+    ]);
+    aimMark.position.set(aim.end.x, 0.065, aim.end.z);
+    aimMark.material.color.set(aim.enemy ? "#d4aa7f" : "#a7c1b5");
     saveClock += dt;
     if (saveClock > 2) {
       saveClock = 0;
@@ -1170,8 +1469,6 @@ function start() {
       time += dt;
       world.animate(time, dt, room.floor === 0 ? "roof" : "interior");
       room.animate(time, dt);
-      if (save?.flags.sculpture && room.floor === 4)
-        world.pendulum.rotation.z = 1.4;
     }
     if (mode === "film") filmFrame(elapsed);
     else if (mode === "travel") travelFrame(elapsed);
@@ -1188,8 +1485,9 @@ function start() {
     } else if (mode === "title") {
       world.player.visible = true;
       animateExplorer(world.player, time);
+      poseCombat(world.player, time);
       world.camera.position.set(15 + Math.sin(time * 0.12) * 1.5, 9, 17);
-      world.camera.lookAt(0, 3, -1);
+      world.camera.lookAt(0, 1.5, -1);
     }
     if (toastClock > 0 && mode === "play") {
       toastClock -= dt;

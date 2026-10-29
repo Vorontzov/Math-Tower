@@ -2,25 +2,25 @@
 
 The complete first expedition now runs in 3D at `midnight/`. The original two-room proof has been expanded into all **18 above-ground floors and B1–B3**, followed by a playable return to the lobby and a campus ending. No other Tower or Interlude is implemented.
 
-The latest direction is a serious, grounded mystery: restrained interfaces, realistic human proportions and skeletal animation, worn surface materials, HDR environment lighting, subdued effects and an unnerving research-institute atmosphere. The opening was rewritten around an institute that should be empty and an emergency transmission that contradicts its records. This is an original setting and narrative. It is a more realistic real-time art treatment, not a claim of film-quality photorealism or scanned environments.
+The latest direction is a serious, grounded mystery: restrained interfaces, realistic human proportions and skeletal animation, worn surface materials, HDR environment lighting, subdued effects and an unnerving research-institute atmosphere. The opening now stages an emergency approach, tower blackout, a rough landing that damages the helicopter, a transmission in the explorer’s own voice, and an unidentified figure at the roof stairwell. Danger continues immediately into play. This is an original setting and narrative. It is a more realistic real-time art treatment, not a claim of film-quality photorealism or scanned environments.
 
 ## Expedition
 
 | Floor | Environment / main event |
 | --- | --- |
-| 18 | Storm roof, helicopter arrival, first typed access relay |
-| 17 | Reception, damaged Guidebot, optional emergency supplies |
-| 16 | Lift vestibule; the display briefly reads 19 |
-| 15 | Hall of Numbers; museum security |
-| 14 | Kinetic exhibit, three fragments, Skitters, releasable sculpture |
-| 13 | Children’s exhibition; gallery exit calibration |
+| 18 | Emergency landing, roof pursuer, cover and the first typed access relay |
+| 17 | Pursuit through security reception; seal the stairwell and recover an emergency badge |
+| 16 | Patrols in a divided lift lobby; use the badge to release the emergency route |
+| 15 | Signal analysis gallery, pursuers and a required security calibration |
+| 14 | Kinetic exhibit, three recorder cartridges, unidentified figures and a releasable counterweight |
+| 13 | Education wing; gallery exit calibration |
 | 12 | Research power; restore Lift B and hear the warning |
 | 11 | Hidden classroom and optional mathematical cache |
-| 10 | Suspended atrium |
+| 10 | Enclosed conference hall |
 | 9 | Archives and a trapped Guidebot |
 | 8 | Robotics lab; maintenance shaft to Floor 6 |
 | 7 | Fibonacci garden |
-| 6 | Impossible laboratory and emergency lighting |
+| 6 | Metrology laboratory and emergency lighting |
 | 5 | Observation glass and the Watcher |
 | 4 | Ten-unit power allocation; optional emergency battery |
 | 3 | Researcher encounter and invitation |
@@ -32,30 +32,36 @@ The latest direction is a serious, grounded mystery: restrained interfaces, real
 
 There are **nine required mathematics systems and three optional caches**. The final override checks all upstream requirements. It starts the escape, not the completion screen. Completion requires reaching the campus exit in the Floor 1 lobby.
 
-Public Lift A serves 18–10. Research Lift B serves its authored stops after Floor 12 power restoration. Freight Lift C serves 8, 4, 1 and B2 after allocation on Floor 4. Stairs connect every adjacent floor, including B2↔B3; escalators and the 8→6 maintenance shaft provide additional routes. Lifts cannot skip unrestored mathematics or unvisited key story events on the first descent. Backtracking and the escape use already restored routes.
+Public Lift A serves 18–10. Research Lift B serves its authored stops after Floor 12 power restoration. Freight Lift C serves 8, 4, 1 and B2 after allocation on Floor 4. Both enclosed fire stairs connect every adjacent floor, including B2↔B3. Stairs offer the floor above and below; transport delivers the player to the same shaft at the destination. The 8→6 maintenance shaft remains an additional route. The former decorative escalators have been removed. Lifts cannot skip unrestored mathematics, the two upper-floor security objectives, or unvisited key story events on the first descent. Backtracking and the escape use already restored routes.
 
-The explorer is a civilian in a sweater and trousers, with an uncovered face. The older researcher has a separate face and jacket. Both use native skeletal idle/run/walk motion. Assets are normalized to face local +Z; player and companion orientation follows their actual movement, including sliding along obstacles. The introduction includes a closer face shot.
+The explorer is a civilian in a sweater and trousers, with an uncovered face. The older researcher has a separate face and jacket. Mara Voss has her own female model in the B2 recording, using native female idle/run/walk motion. All three use skeletal animation. Assets are normalized to face local +Z; player and companion orientation follows their actual movement, including sliding along obstacles. The introduction includes a closer face shot.
 
 ## Action and choices
 
-WASD/arrows move relative to the camera. Space jumps. X sends a radial stun pulse; C shoves at close range. E uses nearby instruments, doors, stairs, lifts, records and characters. P/Escape pauses. Touch buttons provide the same actions.
+WASD/arrows move relative to the camera; Space vaults low obstacles. Move the mouse to aim and click to fire, or face a direction and press X. Q turns the explorer 180 degrees. Hold Shift with arrows to turn in place. Touch controls include Fire, Turn and a holdable Aim button. E uses nearby instruments, doors, stairs, lifts, records and characters; P/Escape pauses.
 
-Skitters are large hunting spiders with eight articulated legs, two body segments, small reflective eyes and a coordinated gait. They lower their bodies and raise their forelegs before rushing; they have no exposed fangs or graphic details. Their span is roughly 3.6 metres, with forgiving body-based contact detection. Damaged Guidebots appear in later rooms. Steam hazards cycle in machinery rooms. Losing all three hearts restores the player at the current stairs while preserving mathematics, fragments and choices.
+The explorer carries a visible stun pistol, with two-handed aiming, a muzzle flash, a brief shot trace and a directional sight marker. A shot hits the first body in an eight-metre line. Walls, glass and tall cabinets block it. There is no radial combat effect or automatic targeting behind the player. A hit stuns for four seconds; the pistol recharges for 1.25 seconds. The HUD shows readiness and nearby pursuit. Freeing the archive Guidebot extends the range to ten metres.
 
-Freeing the archive Guidebot increases pulse range. The emergency supplies restore health. The optional battery protects the opening seconds of each escape floor. The researcher follows if invited and can pull the player clear of an escape attack, with a cooldown. Freight enables an escape shortcut from B2 to the lobby; ventilation clears lower patrols before the breach. Power choices replace one another rather than stacking beyond the budget.
+C is a defensive shove: one opponent directly ahead, within 1.35 metres. The left arm extends, the opponent moves backward, its windup/rush is interrupted and it staggers briefly. Collision checks stop the shove at walls. A miss gives explicit feedback. Shoving is for creating an escape gap, not defeating a room of opponents.
+
+The antagonists are human-proportioned, animated, unidentified figures with obscured faces. Spiders and hostile toy-like robots are no longer spawned in the 3D expedition. Figures patrol, pursue on sight or investigate a shot, visibly prepare a short rush, and recover after being stunned. The opening uses slower pursuit and longer windups. Cover breaks their sight. They do not travel between room instances; each floor has an authored encounter. Friendly Guidebots remain institute equipment.
+
+The shared building plan has a 28-by-23-metre footprint, 3.9-metre storeys, 3.35-metre room ceilings, normal-size doors, consistent lift shafts and two enclosed stair cores. The near walls and ceiling are cut away for the game camera. Research spaces use desks, equipment racks, glazing, cabinets, supported demonstrators and actual circulation gaps. The former floating corridors, giant arches and oversized gallery structures are removed. The impossible measurement is shown on laboratory instrumentation rather than by breaking the building’s footprint.
+
+Steam hazards cycle in machinery rooms. Losing all three hearts restores the player near the current stairs while preserving mathematics, fragments and choices. Supplies restore health; the optional battery protects the opening seconds of each escape floor. The invited researcher follows and can pull the player clear of an escape attack with a cooldown. Freight enables an escape shortcut from B2 to the lobby. The mutually exclusive power allocations retain their existing gameplay consequences.
 
 ## Story and learning
 
 All thirteen principal story beats are staged as in-engine scenes, with an additional breach-to-escape handoff and short choice reactions. Characters and machinery animate in the same environments used for play. Subtitles are always available; optional speech uses installed browser voices. Synthesized sound is not recorded voice acting. Scenes can be skipped, paused, replayed from the pause menu and resumed after interruption. The current cinematic cut is shorter than the earlier written treatment; it adapts its beats rather than claiming its exact shot durations.
 
-Mathematics freezes the simulation and costs no health on mistakes. Answers are typed numbers, decimals or fractions. Worked help requires a checked answer for each intermediate calculation. Leaving a panel or reloading preserves the checked steps. Foundations and Readiness use the existing replaceable banks; this release does not claim to transcribe all uploaded worksheets or provide symbolic algebra grading.
+Mathematics freezes the simulation and costs no health on mistakes. Answers are typed numbers, decimals or fractions. Worked help requires a checked answer for each intermediate calculation. Leaving a panel or reloading preserves the checked steps. The E key that opens a panel and its held-key repeats are consumed before they can type into the answer field. A lone stray E saved by an older build is cleared; deliberate numeric drafts are retained. Foundations and Readiness use the existing replaceable banks; this release does not claim to transcribe all uploaded worksheets or provide symbolic algebra grading.
 
 ## Files, saves and checks
 
 `towers/tower-0001.js` owns both the earlier 2D definition and the `midnightTower` 3D room/scene/socket definition. Shared renderers, actor loading, materials, simulation and state rules live in `engines/midnight/`. All runtime dependencies, character assets and lighting are local; see [asset provenance](../assets/realism/CREDITS.md). Static GitHub Pages/Vercel deployment still needs no build, server API or keys.
 
-The complete 3D save key is `mathTower.midnight.tower1.v2`. Opening-study and 2D saves remain stored independently; checked work is not silently transferred to different questions. The current-floor position, mathematical progress, choices, fragments and pending cinematic are saved. If browser storage is blocked, play remains available for the session.
+The complete 3D save key is `mathTower.midnight.tower1.v2`. Opening-study and 2D saves remain stored independently; checked work is not silently transferred to different questions. The current-floor position, mathematical progress, choices, fragments and pending cinematic are saved. Existing saves that already passed the upper security rooms retain passage; saved positions inside new structural walls are moved to a safe landing. If browser storage is blocked, play remains available for the session.
 
 Run `npm test`, `npm run check`, `python tests/browser.py`, and `python tests/midnight_browser.py`. Node tests traverse every progression state, exercise the transport and learning gates, and pathfind all rendered rooms to verify access to targets. Browser checks render all 21 rooms and exercise keyboard/touch input, saved help, choices, interrupted scenes, the final override, escape stairs, freight travel and campus completion using saved checkpoint fixtures. They are not a claim of testing every route on physical mobile hardware.
 
-Character changes additionally run `python tests/actors_browser.py`. It checks the actual animated face direction against displacement from all eight keyboard directions and verifies that the civilian assets load, with a capture of the introduction's face shot. The Node actor tests exercise every shipped idle/walk/run clip, anatomical scale, relaxed arms and articulated spider legs.
+Character changes additionally run `python tests/actors_browser.py`. Combat/architecture changes run `python tests/combat_browser.py`, which exercises actual fire/turn/shove controls, wall blocking, aim-in-place, the early security objectives, touch controls and wide-screen rendering. It checks the actual animated face direction against displacement from all eight keyboard directions and verifies that the civilian assets load, with a capture of the introduction's face shot. The Node tests exercise shipped human clips and anatomy, directed hit selection, cover, shove collision, telegraphed attacks, opening gates and old-save migration. The unused spider primitive remains a legacy asset utility, not a 3D encounter.

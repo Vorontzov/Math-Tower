@@ -7,7 +7,6 @@ import {
   rod,
   explorer,
   guidebot,
-  skitter,
   helicopter,
 } from "./actors.js";
 
@@ -52,7 +51,7 @@ export function createWorld(canvas) {
   museum.visible = false;
   const stone = mat("#466178", 0.65, 0.25),
     edge = mat("#1c3146", 0.55, 0.3),
-    gold = mat("#c89e59", 0.32, 0.65),
+    gold = mat("#727c7a", 0.52, 0.65),
     ivory = mat("#ded8be"),
     dark = mat("#0e2635"),
     teal = mat("#23525e", 0.42, 0.2);
@@ -112,39 +111,17 @@ export function createWorld(canvas) {
     const group = new T.Group();
     group.position.set(x, 0, z);
     parent.add(group);
-    for (const s of [-1, 1]) {
-      box(group, edge, [s * 1.65, 2.2, -0.25], [0.4, 4.4, 0.6]);
-      box(group, gold, [s * 1.65, 2.2, 0.13], [0.15, 4.5, 0.2]);
-    }
-    box(group, edge, [0, 4.35, -0.25], [3.6, 0.4, 0.6]);
-    box(group, gold, [0, 4.4, 0.13], [3.5, 0.15, 0.2]);
-    const leaf = box(group, teal, [0, 2, 0.15], [2.9, 4, 0.22]);
-    for (let i = 0; i < 4; i++)
-      box(leaf, gold, [0, (i - 1.5) * 0.2, 0.6], [0.8, 0.015, 0.1]);
-    text(group, title, [0, 5, 0.1], 4);
+    for (const dx of [-1.2, 1.2])
+      box(group, edge, [dx, 1.3, 0], [0.16, 2.6, 0.25]);
+    box(group, edge, [0, 2.6, 0], [2.55, 0.18, 0.25]);
+    const leaf = box(group, teal, [0, 1.2, 0.08], [2.2, 2.4, 0.12]);
+    box(leaf, gold, [0.65, 0, 0.1], [0.32, 0.055, 0.065]);
+    text(group, title, [0, 2.95, 0.1], 2.8, "#c7cfc8", 60);
     return { group, leaf };
-  }
-  function consoleProp(parent, x, z) {
-    const g = new T.Group();
-    g.position.set(x, 0, z);
-    parent.add(g);
-    box(g, edge, [0, 0.65, 0], [0.65, 1.3, 0.55]);
-    const top = box(g, gold, [0, 1.35, 0], [0.9, 0.16, 0.7]);
-    top.rotation.x = 0.2;
-    const screen = box(g, cool, [0, 1.45, 0.07], [0.64, 0.04, 0.43]);
-    screen.rotation.x = 0.2;
-    const halo = mesh(
-      g,
-      new T.TorusGeometry(0.5, 0.025, 8, 48),
-      cool,
-      [0, 2.1, 0],
-    );
-    g.userData.halo = halo;
-    return g;
   }
   box(roof, edge, [0, -0.5, 0], [30, 1, 24]);
   // Carry the roof down into a full facade so wide shots read as a building.
-  box(roof, edge, [0, -31, 0], [29.6, 60, 23.6]);
+  box(roof, edge, [0, -33.5, 0], [29.6, 66, 23.6]);
   const facadeGlass = mat("#202e37", 0.19, 0.7),
     facadeLight = new T.MeshStandardMaterial({
       color: "#b8b39c",
@@ -155,8 +132,8 @@ export function createWorld(canvas) {
     }),
     frontWindows = [[], []],
     sideWindows = [[], []];
-  for (let floor = 0; floor < 18; floor++) {
-    const y = -2.8 - floor * 3.3;
+  for (let floor = 0; floor < 17; floor++) {
+    const y = -2.8 - floor * 3.9;
     for (const z of [-11.82, 11.82])
       for (let col = 0; col < 12; col++)
         frontWindows[(floor * 7 + col) % 9 === 0 ? 1 : 0].push([
@@ -205,19 +182,30 @@ export function createWorld(canvas) {
   pad.rotation.x = -Math.PI / 2;
   for (const x of [-7, -5]) box(roof, ivory, [x, 0.08, -1], [0.14, 0.02, 3]);
   box(roof, ivory, [-6, 0.08, -1], [2, 0.02, 0.14]);
-  for (const x of [4.9, 11.1]) box(roof, edge, [x, 2.8, -9.4], [2.8, 5.6, 3]);
-  box(roof, edge, [8, 5, -9.4], [3.5, 1.2, 3]);
-  box(roof, dark, [8, 2, -11], [3.5, 4, 0.2]);
-  const roofDoor = door(roof, 8, -7.8, "MUSEUM ACCESS");
-  text(roof, "M A T H   T O W E R", [8, 5.9, -7.7], 7, "#d6b779", 64);
-  const roofConsole = consoleProp(roof, 5, -6.4);
-  lamp(roof, 3, -7, 3.5);
-  lamp(roof, 12, -7, 3.5);
-  lamp(roof, -13, 8);
-  lamp(roof, 13, 8);
+  // Roof plant, stair head and service door share the floor below's grid.
+  for (const x of [4.2, 11.8]) box(roof, edge, [x, 1.75, -9.5], [0.4, 3.5, 4]);
+  box(roof, edge, [8, 1.75, -11.3], [8, 3.5, 0.4]);
+  for (const x of [5.45, 10.55])
+    box(roof, edge, [x, 1.75, -7.6], [2.9, 3.5, 0.3]);
+  box(roof, edge, [8, 3.1, -7.6], [2.4, 0.8, 0.3]);
+  box(roof, stone, [8, 3.55, -9.5], [8.2, 0.2, 4.2]);
+  const roofDoor = door(roof, 8, -7.45, "STAIR B / RESTRICTED");
+  text(roof, "UNIVERSITY RESEARCH DIVISION", [8, 3.3, -7.38], 6, "#aeb8b7", 48);
+  const roofConsole = new T.Group(); // Math instrument is owned by the active room.
+  lamp(roof, 3.5, -7, 2.8);
+  lamp(roof, 12.3, -7, 2.8);
+  for (const x of [-13, 13]) lamp(roof, x, 8, 2.8);
+  // The second fire stair reaches the same southwest corner on every floor.
+  for (const x of [-10.6, -7.4])
+    box(roof, edge, [x, 1.55, 9.8], [0.22, 3.1, 3.4]);
+  box(roof, edge, [-9, 1.55, 11.3], [3.4, 3.1, 0.22]);
+  box(roof, stone, [-9, 3.15, 9.8], [3.4, 0.2, 3.4]);
+  const roofStairA = door(roof, -9, 8.2, "FIRE STAIR A");
+  const roofDoors = [roofDoor, roofStairA];
   const obstacles = [
-    { x: 0, z: 2, w: 2.5, d: 1.3, h: 0.7 },
-    { x: 3, z: -1, w: 1.3, d: 1.3, h: 0.9 },
+    { x: -9, z: 9.9, w: 3.4, d: 3.3, h: 3.3 },
+    { x: 0, z: 2, w: 2.5, d: 1.3, h: 1.5 },
+    { x: 3, z: -1, w: 1.3, d: 1.3, h: 1.5 },
   ];
   for (const o of obstacles) {
     box(roof, teal, [o.x, o.h / 2, o.z], [o.w, o.h, o.d]);
@@ -310,163 +298,9 @@ export function createWorld(canvas) {
     puddle.castShadow = false;
   }
 
-  // One dimensional room: floor, colonnade, suspended machinery and clear routes.
-  box(museum, edge, [0, -0.4, 0], [30, 0.8, 26]);
-  const lightTiles = [],
-    darkTiles = [];
-  for (let x = -14; x < 15; x += 2)
-    for (let z = -12; z < 13; z += 2)
-      ((x + z) % 4 === 0 ? lightTiles : darkTiles).push([x, 0, z]);
-  instances(museum, mat("#596165", 0.36, 0.35), [1.96, 0.04, 1.96], lightTiles);
-  instances(museum, mat("#50595e", 0.36, 0.35), [1.96, 0.04, 1.96], darkTiles);
-  for (const x of [-12, 12])
-    box(museum, gold, [x, 0.035, 0], [0.06, 0.025, 25]);
-  for (const z of [-10, 10])
-    box(museum, gold, [0, 0.035, z], [28, 0.025, 0.06]);
-  box(museum, dark, [-4, 5, -12.8], [22, 10, 0.6]);
-  box(museum, dark, [13, 5, -12.8], [4, 10, 0.6]);
-  box(museum, dark, [9, 7.5, -12.8], [4, 5, 0.6]);
-  box(museum, dark, [-15, 4, 0], [0.5, 8, 26]);
-  box(museum, dark, [15, 4, 0], [0.5, 8, 26]);
-  for (const x of [-13, -8, -3, 3, 13]) {
-    box(museum, teal, [x, 4, -12.35], [3, 7, 0.2]);
-    for (const s of [-1, 1])
-      box(museum, gold, [x + s * 1.48, 4, -12.1], [0.08, 7, 0.08]);
-    text(
-      museum,
-      ["π", "∞", "Σ", "√", "△"][[-13, -8, -3, 3, 13].indexOf(x)],
-      [x, 6, -12],
-      2.2,
-    );
-  }
-  // The opening door reveals an actual deep set, with inverted floating geometry.
-  box(museum, teal, [9, -0.1, -20], [4, 0.2, 18]);
-  box(museum, dark, [6.9, 3, -20], [0.2, 6, 18]);
-  box(museum, dark, [11.1, 3, -20], [0.2, 6, 18]);
-  for (let i = 0; i < 6; i++) {
-    for (const x of [7.1, 10.9])
-      box(museum, gold, [x, 2.8, -13 - i * 2.4], [0.07, 5.6, 0.08]);
-    box(museum, gold, [9, 5.6, -13 - i * 2.4], [4, 0.08, 0.08]);
-    const shape = mesh(museum, new T.OctahedronGeometry(0.45), cool, [
-      9 + Math.sin(i) * 0.6,
-      2.8 + Math.cos(i) * 1.1,
-      -15 - i * 2,
-    ]);
-    shape.rotation.z = i * 0.6;
-  }
-  for (const x of [-13, 13])
-    for (const z of [-9, -2, 5]) {
-      mesh(museum, new T.CylinderGeometry(0.35, 0.45, 6, 12), ivory, [x, 3, z]);
-      mesh(museum, new T.CylinderGeometry(0.6, 0.6, 0.2, 12), gold, [
-        x,
-        5.95,
-        z,
-      ]);
-      lamp(museum, x * 0.95, z, 3.4);
-    }
-  for (const z of [-9, -2, 5]) {
-    const arch = mesh(
-      museum,
-      new T.TorusGeometry(13, 0.13, 8, 64, Math.PI),
-      gold,
-      [0, 6, z],
-    );
-    arch.scale.y = 0.42;
-    rod(museum, gold, [-13, 6, z], [13, 6, z], 0.04);
-  }
-  text(
-    museum,
-    "THE GEOMETRY OF THE IMPOSSIBLE",
-    [0, 9, -12.3],
-    12,
-    "#eed9ad",
-    62,
-  );
-  box(museum, edge, [0, 0.2, -1], [5, 0.4, 5]);
-  const mechanism = new T.Group();
-  mechanism.position.set(0, 3.5, -1);
-  museum.add(mechanism);
-  const rings = [];
-  for (let i = 0; i < 3; i++) {
-    const ring = mesh(
-      mechanism,
-      new T.TorusGeometry(2.2 + i * 0.32, 0.075, 12, 100),
-      gold,
-    );
-    ring.rotation.set(i * 0.9, 0.3 + i * 0.7, 0);
-    rings.push(ring);
-  }
-  const core = mesh(mechanism, new T.IcosahedronGeometry(0.85, 0), cool);
-  core.material = new T.MeshStandardMaterial({
-    color: "#72c9d2",
-    emissive: "#3ca8ae",
-    emissiveIntensity: 0.8,
-    metalness: 0.7,
-    roughness: 0.2,
-    flatShading: true,
-  });
-  rod(museum, gold, [0, 5, -1], [0, 11, -1], 0.04);
-  const pendulum = new T.Group();
-  pendulum.position.set(-5, 9, -2);
-  museum.add(pendulum);
-  rod(pendulum, gold, [0, 0, 0], [0, -6, 0], 0.04);
-  ball(pendulum, gold, [0, -6, 0], [0.6, 0.6, 0.6]);
-  for (let i = 0; i < 7; i++) {
-    const x = (i % 2 ? 1 : -1) * (5 + i * 0.8),
-      z = -5 + i;
-    const poly = mesh(
-      museum,
-      i % 2 ? new T.OctahedronGeometry(0.6) : new T.IcosahedronGeometry(0.6),
-      i % 2 ? gold : ivory,
-      [x, 5.3 + (i % 3), z],
-    );
-    poly.rotation.set(i, i * 0.7, 0);
-    rod(museum, gold, [x, poly.position.y + 0.5, z], [x, 11, z], 0.018);
-  }
-  const exitDoor = door(museum, 9, -10.5, "LOWER GALLERIES");
-  const museumConsole = consoleProp(museum, 6.5, -8);
-  const robot = guidebot();
-  robot.position.set(-4, 0, 2);
-  robot.rotation.y = 0.5;
-  museum.add(robot);
-  const enemies = [
-    [-7, -4],
-    [7, -2],
-    [3, -6],
-  ].map(([x, z], i) => {
-    const e = skitter();
-    e.position.set(x, 0, z);
-    e.userData.phase = i * 1.3;
-    museum.add(e);
-    return e;
-  });
-  const shards = [
-    [8, 6],
-    [-10, -6],
-    [4, -7],
-  ].map(([x, z]) => {
-    const g = new T.Group();
-    g.position.set(x, 1.1, z);
-    museum.add(g);
-    mesh(g, new T.OctahedronGeometry(0.27), cool);
-    const ring = mesh(g, new T.TorusGeometry(0.44, 0.018, 6, 40), gold);
-    ring.rotation.x = 0.8;
-    return g;
-  });
   const player = explorer();
   scene.add(player);
   player.position.set(-6, 0, 4);
-  const pulse = mesh(
-    scene,
-    new T.TorusGeometry(1, 0.04, 8, 64),
-    new T.MeshBasicMaterial({
-      color: "#9efde9",
-      transparent: true,
-      opacity: 0,
-    }),
-    [0, 0.6, 0],
-  );
-  pulse.rotation.x = -Math.PI / 2;
   const resize = () => {
     const w = canvas.clientWidth,
       h = canvas.clientHeight;
@@ -484,46 +318,28 @@ export function createWorld(canvas) {
     city,
     player,
     heli,
-    robot,
-    enemies,
-    shards,
-    rings,
-    core,
-    pendulum,
     roofDoor,
-    exitDoor,
+    roofDoors,
     roofConsole,
-    museumConsole,
     obstacles,
     rain,
     rainData,
-    pulse,
     resize,
+    facadeLight,
     enter(room) {
       roof.visible = room === "roof";
-      museum.visible = room === "museum";
+      museum.visible = false;
       city.visible = room === "roof";
-      scene.fog.density = room === "roof" ? 0.012 : 0.018;
-      scene.background.set(room === "roof" ? "#10171c" : "#142028");
+      scene.fog.density = room === "roof" ? 0.012 : 0.008;
+      scene.background.set(room === "roof" ? "#10171c" : "#10191e");
     },
     animate(time, dt, room) {
-      heli.userData.rotor.rotation.y += dt * 30;
-      heli.userData.tailRotor.rotation.x += dt * 45;
-      heli.position.y = 0.5 + Math.sin(time * 2) * 0.035;
-      rings.forEach((r, i) => {
-        r.rotation.y += dt * (0.15 + i * 0.09);
-        r.rotation.z += dt * 0.07;
-      });
-      core.rotation.y = time * 0.3;
-      pendulum.rotation.z = Math.sin(time * 0.9) * 0.35;
-      robot.userData.head.rotation.z = Math.sin(time) * 0.1;
-      shards.forEach((s, i) => {
-        s.rotation.y = time;
-        s.position.y = 1.1 + Math.sin(time * 2 + i) * 0.14;
-      });
-      for (const p of [roofConsole, museumConsole]) {
-        p.userData.halo.rotation.y = time * 0.8;
-        p.userData.halo.position.y = 2.1 + Math.sin(time * 2) * 0.1;
+      if (!heli.userData.damaged) {
+        heli.userData.rotor.rotation.y += dt * 30;
+        heli.userData.tailRotor.rotation.x += dt * 45;
+      } else {
+        heli.userData.rotor.rotation.y += dt * 1.5;
+        heli.userData.tailRotor.rotation.x += dt * 2;
       }
       if (room === "roof") {
         for (let i = 1; i < rainData.length; i += 6) {
