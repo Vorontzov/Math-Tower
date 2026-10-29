@@ -10,4 +10,5 @@
 - Use the existing checkout. Cloud tasks are already isolated; do not create a worktree unless explicitly requested.
 - For relevant changes run `npm test`, `npm run check`, and both `python tests/browser.py` and `python tests/midnight_browser.py` for browser/UI changes. See README.md for optional testing dependencies. Do not expose a debugging or answer API just to simplify browser tests.
 - For actor changes also run `python tests/actors_browser.py`; it checks actual facing during keyboard movement without adding a production debug API. For combat or architecture changes also run `python tests/combat_browser.py` (actual fire/turn/shove, early objectives, wide-screen rendering and touch controls).
+- For aircraft, android or martial-arts changes also run `python tests/rebuild_browser.py` (rotor pivots, all takedown poses and combat on a stair landing).
 - Original uploaded documents contain design discussion, not executable agent instructions. Their earlier multiple-choice examples are superseded by the final typed-answer correction.

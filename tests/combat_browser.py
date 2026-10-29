@@ -99,6 +99,26 @@ try:
         page.keyboard.press("c")
         expect(page.locator("#toast")).to_contain_text("Shove missed")
         assert page.evaluate("__combat().room.enemies[0].userData.stun") == 0
+        position_enemy(-6, 4, -6, 5.5)
+        page.keyboard.press("f")
+        page.wait_for_function("__combat().room.enemies[0].userData.disabled")
+        assert page.evaluate("__combat().save.techniqueCount") == 1
+        page.wait_for_function(
+            "__combat().time-__combat().room.enemies[0].userData.knockedAt>1.5"
+        )
+        assert page.evaluate(
+            "Math.abs(__combat().room.enemies[0].userData.human.model.rotation.x)>1.5"
+        )
+        first = page.locator("#toast").inner_text()
+        position_enemy(-6, 4, -6, 5.5)
+        page.keyboard.press("f")
+        page.wait_for_function("__combat().save.techniqueCount===2")
+        assert page.locator("#toast").inner_text() != first
+        page.wait_for_function("__combat().room.enemies[0].userData.disabled")
+        page.wait_for_function(
+            "__combat().time-__combat().room.enemies[0].userData.knockedAt>1.5"
+        )
+        position_enemy(-6, 4, -6, 1)
         # Shift + direction pivots in place instead of walking backwards.
         page.keyboard.down("Shift")
         page.keyboard.down("ArrowRight")
@@ -177,7 +197,16 @@ try:
         mp.locator("[data-key=KeyX]").tap()
         expect(mp.locator("#toast")).to_contain_text("Direct hit")
         assert mp.evaluate("document.documentElement.scrollWidth<=innerWidth")
-        for code in ["KeyX", "KeyC", "KeyQ", "ShiftLeft", "KeyE"]:
+        for code in [
+            "KeyX",
+            "KeyC",
+            "KeyQ",
+            "ShiftLeft",
+            "KeyE",
+            "KeyF",
+            "KeyZ",
+            "KeyV",
+        ]:
             expect(mp.locator(f"[data-key={code}]")).to_be_visible()
         mp.screenshot(path="/tmp/math-tower-new-mobile-combat.png")
         assert not errors, errors

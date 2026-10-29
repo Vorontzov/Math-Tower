@@ -132,8 +132,17 @@ export async function groundLighting(world) {
     scene.background = backgroundColor;
     originalEnter(room);
     scene.traverse((o) => {
+      if (o.isDirectionalLight && o.shadow) {
+        o.castShadow = room === "roof" && o.position.x < 0;
+      }
       if (o.isDirectionalLight)
-        o.intensity = o.castShadow ? (room === "roof" ? 2.6 : 1.8) : 0.65;
+        o.intensity = o.castShadow
+          ? room === "roof"
+            ? 2.6
+            : 0.1
+          : room === "roof"
+            ? 0.65
+            : 0.12;
     });
     if (room === "roof") {
       world.city.visible = false;

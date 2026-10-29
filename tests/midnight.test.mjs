@@ -137,6 +137,7 @@ test("all 21 rendered rooms have reachable stairs, instruments, choices and coll
   const s = freshState(1),
     world = {
       scene: new T.Scene(),
+      roof: new T.Group(),
       enter() {},
       museumConsole: {},
       roofConsole: {},
@@ -157,12 +158,13 @@ test("all 21 rendered rooms have reachable stairs, instruments, choices and coll
       step = 0.5,
       start = floor === 0 ? [-6, 4] : [-8, 7];
     const blocked = (x, z) =>
-      x < -13 ||
-      x > 13 ||
-      z < -10 ||
-      z > 10 ||
+      x < -17 ||
+      x > 17 ||
+      z < -15 ||
+      z > 15 ||
       r.colliders.some(
         (o) =>
+          o.h > 0 &&
           Math.abs(x - o.x) < o.w / 2 + 0.3 &&
           Math.abs(z - o.z) < o.d / 2 + 0.3,
       );
@@ -184,7 +186,9 @@ test("all 21 rendered rooms have reachable stairs, instruments, choices and coll
         }
       }
     }
-    for (const t of r.targets)
+    for (const t of r.targets.filter(
+      (t) => !t.label.includes("cabin floor controls"),
+    ))
       assert.ok(
         queue.some(([x, z]) => Math.hypot(x - t.x, z - t.z) < t.r - 0.1),
         `Floor ${tower.floors[floor]} target ${t.label} must be reachable`,

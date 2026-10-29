@@ -9,27 +9,33 @@
     <meta name="theme-color" content="#102530" />
     <title>Math Tower — The First Correspondence</title>
     <link rel="icon" href="../assets/tower.svg" />
-    <link rel="stylesheet" href="./style.css?v=0.4.0" />
+    <link rel="stylesheet" href="./style.css?v=0.5.0" />
     <script type="importmap">
       {
         "imports": {
-          "../engines/midnight/actors.js": "../engines/midnight/actors.js?v=0.4.0",
-          "../engines/midnight/world.js": "../engines/midnight/world.js?v=0.4.0",
-          "../engines/midnight/rooms.js": "../engines/midnight/rooms.js?v=0.4.0",
-          "../engines/midnight/state.js": "../engines/midnight/state.js?v=0.4.0",
-          "../engines/midnight/audio.js": "../engines/midnight/audio.js?v=0.4.0",
-          "../engines/midnight/realism.js": "../engines/midnight/realism.js?v=0.4.0",
-          "../towers/tower-0001.js": "../towers/tower-0001.js?v=0.4.0"
+          "../engines/midnight/furnishings.js": "../engines/midnight/furnishings.js?v=0.5.0",
+          "../engines/midnight/static-geometry.js": "../engines/midnight/static-geometry.js?v=0.5.0",
+          "../engines/midnight/architecture.js": "../engines/midnight/architecture.js?v=0.5.0",
+          "../engines/midnight/combat.js": "../engines/midnight/combat.js?v=0.5.0",
+          "../engines/midnight/weather.js": "../engines/midnight/weather.js?v=0.5.0",
+          "../engines/midnight/martial.js": "../engines/midnight/martial.js?v=0.5.0",
+          "../engines/midnight/actors.js": "../engines/midnight/actors.js?v=0.5.0",
+          "../engines/midnight/world.js": "../engines/midnight/world.js?v=0.5.0",
+          "../engines/midnight/rooms.js": "../engines/midnight/rooms.js?v=0.5.0",
+          "../engines/midnight/state.js": "../engines/midnight/state.js?v=0.5.0",
+          "../engines/midnight/audio.js": "../engines/midnight/audio.js?v=0.5.0",
+          "../engines/midnight/realism.js": "../engines/midnight/realism.js?v=0.5.0",
+          "../towers/tower-0001.js": "../towers/tower-0001.js?v=0.5.0"
         }
       }
     </script>
-    <script type="module" src="../engines/midnight/game.js?v=0.4.0"></script>
+    <script type="module" src="../engines/midnight/game.js?v=0.5.0"></script>
   </head>
   <body>
     <canvas
       id="world"
       tabindex="0"
-      aria-label="Three dimensional Math Tower adventure. WASD or arrows move, Space jumps, X fires forward, Q turns around, C shoves, E interacts. Touch controls are also available."
+      aria-label="Three dimensional Math Tower adventure. WASD or arrows move, Space jumps, X fires forward, Q turns around, C shoves, F performs a martial-arts takedown, Z/V turns the camera, E interacts. Walk stairs directly; call and enter elevators. Touch controls are also available."
     ></canvas>
     <div class="vignette" aria-hidden="true"></div>
     <div id="fade" aria-hidden="true"></div>
@@ -104,7 +110,8 @@
       <div id="prompt" hidden><kbd>E</kbd> <span></span></div>
       <div id="controls">
         WASD move <b>·</b> Mouse aim / click fire <b>·</b> X fire <b>·</b> Q
-        turn <b>·</b> Shift + arrows aim <b>·</b> C shove <b>·</b> E use
+        turn <b>·</b> F takedown <b>·</b> Z/V camera <b>·</b> C shove <b>·</b> E
+        use
       </div>
     </div>
     <div id="cinema" hidden>
@@ -135,6 +142,9 @@
           aria-label="Hold Aim and use arrows to turn without moving"
         >
           Aim</button
+        ><button data-key="KeyF">Takedown</button
+        ><button data-key="KeyZ" aria-label="Rotate camera left">Look ↶</button
+        ><button data-key="KeyV" aria-label="Rotate camera right">Look ↷</button
         ><button data-key="KeyC">Shove</button
         ><button data-key="KeyE">Use</button>
       </div>
@@ -185,8 +195,10 @@
         WASD / arrows move · Space vaults low obstacles · Mouse aims and click
         fires, or turn with arrows and press X · Q turns 180° · Hold Shift (Aim
         on touch) with arrows to turn in place · C shoves one opponent within
-        arm’s reach · E uses nearby instruments. Walls stop shots. The pistol
-        recharges after each shot.
+        arm’s reach · F performs a varied martial-arts takedown · Z/V or
+        right-drag turns the camera · Walk stairs; E calls a lift, then enter it
+        and use its floor controls. E also uses nearby instruments. Walls stop
+        shots. The pistol recharges after each shot.
       </p>
       <label class="setting"
         ><input id="reduced-motion" type="checkbox" /> Reduce camera

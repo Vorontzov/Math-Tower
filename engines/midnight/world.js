@@ -1,3 +1,4 @@
+import { batchArchitecture } from "./static-geometry.js";
 import * as T from "../../vendor/three.module.js";
 import {
   mat,
@@ -10,13 +11,23 @@ import {
   helicopter,
 } from "./actors.js";
 
+import { BUILDING, buildStairCore, liftCabin } from "./architecture.js";
+import { createStorm } from "./weather.js";
+
 export function createWorld(canvas) {
   const renderer = new T.WebGLRenderer({
     canvas,
     antialias: true,
     powerPreference: "high-performance",
   });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.65));
+  const gl = renderer.getContext(),
+    debug = gl.getExtension("WEBGL_debug_renderer_info");
+  const software =
+    debug &&
+    /swiftshader|llvmpipe|software/i.test(
+      gl.getParameter(debug.UNMASKED_RENDERER_WEBGL),
+    );
+  renderer.setPixelRatio(software ? 0.65 : Math.min(devicePixelRatio, 1.5));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = T.PCFSoftShadowMap;
   renderer.outputColorSpace = T.SRGBColorSpace;
@@ -25,13 +36,13 @@ export function createWorld(canvas) {
   const scene = new T.Scene();
   scene.background = new T.Color("#101d30");
   scene.fog = new T.FogExp2("#14253a", 0.012);
-  const camera = new T.PerspectiveCamera(45, 1, 0.1, 180);
+  const camera = new T.PerspectiveCamera(62, 1, 0.065, 180);
   camera.position.set(19, 17, 24);
   scene.add(new T.HemisphereLight("#a8dcff", "#25394e", 2));
   const key = new T.DirectionalLight("#ffdfaa", 3);
   key.position.set(-8, 18, 10);
   key.castShadow = true;
-  key.shadow.mapSize.set(2048, 2048);
+  key.shadow.mapSize.set(software ? 512 : 1536, software ? 512 : 1536);
   Object.assign(key.shadow.camera, {
     left: -22,
     right: 22,
@@ -119,9 +130,12 @@ export function createWorld(canvas) {
     text(group, title, [0, 2.95, 0.1], 2.8, "#c7cfc8", 60);
     return { group, leaf };
   }
-  box(roof, edge, [0, -0.5, 0], [30, 1, 24]);
+
   // Carry the roof down into a full facade so wide shots read as a building.
-  box(roof, edge, [0, -33.5, 0], [29.6, 66, 23.6]);
+  for (const x of [-17.8, 17.8])
+    box(roof, edge, [x, -33.5, 0], [0.35, 66, 31.6]);
+  for (const z of [-15.8, 15.8])
+    box(roof, edge, [0, -33.5, z], [35.6, 66, 0.35]);
   const facadeGlass = mat("#202e37", 0.19, 0.7),
     facadeLight = new T.MeshStandardMaterial({
       color: "#b8b39c",
@@ -133,20 +147,20 @@ export function createWorld(canvas) {
     frontWindows = [[], []],
     sideWindows = [[], []];
   for (let floor = 0; floor < 17; floor++) {
-    const y = -2.8 - floor * 3.9;
-    for (const z of [-11.82, 11.82])
-      for (let col = 0; col < 12; col++)
+    const y = -1.95 - floor * 3.9;
+    for (const z of [-15.99, 15.99])
+      for (let col = 0; col < 14; col++)
         frontWindows[(floor * 7 + col) % 9 === 0 ? 1 : 0].push([
-          -13.2 + col * 2.4,
+          -15.6 + col * 2.4,
           y,
           z,
         ]);
-    for (const x of [-14.82, 14.82])
-      for (let col = 0; col < 9; col++)
+    for (const x of [-17.99, 17.99])
+      for (let col = 0; col < 12; col++)
         sideWindows[(floor * 11 + col) % 13 === 0 ? 1 : 0].push([
           x,
           y,
-          -10 + col * 2.5,
+          -13.7 + col * 2.5,
         ]);
   }
   for (let i = 0; i < 2; i++) {
@@ -164,61 +178,104 @@ export function createWorld(canvas) {
     );
   }
   const roofTiles = [];
-  for (let x = -14; x < 15; x += 2)
-    for (let z = -11; z < 12; z += 2) roofTiles.push([x, 0.005, z]);
-  instances(roof, stone, [1.96, 0.05, 1.96], roofTiles);
-  for (const x of [-14.6, 14.6]) {
-    box(roof, edge, [x, 0.65, 0], [0.35, 1.3, 23.5]);
-    box(roof, gold, [x, 1.33, 0], [0.38, 0.08, 23.5]);
+  for (let x = -17.5; x < 18; x++)
+    for (let z = -15.5; z < 16; z++) {
+      if (
+        BUILDING.stairs.some(
+          (c) =>
+            Math.abs(x - c.x) < 1.85 &&
+            (z - c.z) * c.sign > -0.3 &&
+            (z - c.z) * c.sign < 6.1,
+        )
+      )
+        continue;
+      roofTiles.push([x, -0.075, z]);
+    }
+  instances(roof, stone, [0.995, 0.15, 0.995], roofTiles);
+  const obstacles = [];
+  for (const x of [-17.7, 17.7]) {
+    box(roof, edge, [x, 0.65, 0], [0.3, 1.3, 32]);
+    box(roof, gold, [x, 1.33, 0], [0.36, 0.08, 32]);
+    obstacles.push({ x, z: 0, w: 0.3, d: 32, h: 1.35 });
   }
-  box(roof, edge, [0, 0.65, -11.6], [29.4, 1.3, 0.35]);
-  box(roof, edge, [0, 0.65, 11.6], [29.4, 1.3, 0.35]);
+  for (const z of [-15.7, 15.7]) {
+    box(roof, edge, [0, 0.65, z], [36, 1.3, 0.3]);
+    obstacles.push({ x: 0, z, w: 36, d: 0.3, h: 1.3 });
+  }
   const pad = mesh(
     roof,
-    new T.TorusGeometry(4.2, 0.07, 8, 80),
-    gold,
-    [-6, 0.08, -1],
+    new T.RingGeometry(5.35, 5.43, 96),
+    ivory,
+    [-6, 0.007, -1],
   );
   pad.rotation.x = -Math.PI / 2;
-  for (const x of [-7, -5]) box(roof, ivory, [x, 0.08, -1], [0.14, 0.02, 3]);
-  box(roof, ivory, [-6, 0.08, -1], [2, 0.02, 0.14]);
-  // Roof plant, stair head and service door share the floor below's grid.
-  for (const x of [4.2, 11.8]) box(roof, edge, [x, 1.75, -9.5], [0.4, 3.5, 4]);
-  box(roof, edge, [8, 1.75, -11.3], [8, 3.5, 0.4]);
-  for (const x of [5.45, 10.55])
-    box(roof, edge, [x, 1.75, -7.6], [2.9, 3.5, 0.3]);
-  box(roof, edge, [8, 3.1, -7.6], [2.4, 0.8, 0.3]);
-  box(roof, stone, [8, 3.55, -9.5], [8.2, 0.2, 4.2]);
-  const roofDoor = door(roof, 8, -7.45, "STAIR B / RESTRICTED");
-  text(roof, "UNIVERSITY RESEARCH DIVISION", [8, 3.3, -7.38], 6, "#aeb8b7", 48);
-  const roofConsole = new T.Group(); // Math instrument is owned by the active room.
-  lamp(roof, 3.5, -7, 2.8);
-  lamp(roof, 12.3, -7, 2.8);
-  for (const x of [-13, 13]) lamp(roof, x, 8, 2.8);
-  // The second fire stair reaches the same southwest corner on every floor.
-  for (const x of [-10.6, -7.4])
-    box(roof, edge, [x, 1.55, 9.8], [0.22, 3.1, 3.4]);
-  box(roof, edge, [-9, 1.55, 11.3], [3.4, 3.1, 0.22]);
-  box(roof, stone, [-9, 3.15, 9.8], [3.4, 0.2, 3.4]);
-  const roofStairA = door(roof, -9, 8.2, "FIRE STAIR A");
-  const roofDoors = [roofDoor, roofStairA];
-  const obstacles = [
-    { x: -9, z: 9.9, w: 3.4, d: 3.3, h: 3.3 },
+  for (const x of [-7, -5]) box(roof, ivory, [x, 0.004, -1], [0.13, 0.006, 3]);
+  box(roof, ivory, [-6, 0.004, -1], [2, 0.006, 0.13]);
+  const stairDoors = BUILDING.stairs.map(
+    (c) => buildStairCore(roof, c, obstacles, true).userData.roofDoor,
+  );
+  const roofDoors = stairDoors,
+    roofDoor = { group: new T.Group() },
+    roofConsole = new T.Group();
+  text(
+    roof,
+    "RESEARCH DIVISION / STAIR B",
+    [9, 2.6, -7.94],
+    3.2,
+    "#c7cfc8",
+    54,
+  );
+  text(roof, "FIRE STAIR A", [-9, 2.6, 7.94], 2, "#c7cfc8", 54);
+  const car = liftCabin(roof, "A", -10, -7);
+  roof.userData.lifts = { A: car };
+  car.userData.setFloor("18");
+  for (const x of [-11.55, -8.45]) {
+    box(roof, stone, [x, 1.75, -8.6], [0.25, 3.5, 3.5]);
+    obstacles.push({ x, z: -8.6, w: 0.25, d: 3.5, h: 3.5 });
+  }
+  box(roof, stone, [-10, 1.75, -10.3], [3.35, 3.5, 0.2]);
+  box(roof, stone, [-10, 3.55, -8.6], [3.5, 0.2, 3.6]);
+  for (const sign of [-1, 1]) {
+    box(roof, stone, [-10 + sign * 1.23, 1.75, -7], [0.6, 3.5, 0.3]);
+    obstacles.push({ x: -10 + sign * 1.23, z: -7, w: 0.6, d: 0.3, h: 3.5 });
+  }
+  const doorCollider = { x: -10, z: -7, w: 3.3, d: 0.28, h: 2.45 };
+  obstacles.push(doorCollider);
+  car.userData.collider = doorCollider;
+  for (const o of [
     { x: 0, z: 2, w: 2.5, d: 1.3, h: 1.5 },
     { x: 3, z: -1, w: 1.3, d: 1.3, h: 1.5 },
-  ];
-  for (const o of obstacles) {
+    { x: 4, z: 7, w: 2.5, d: 1.5, h: 1.8 },
+  ]) {
+    obstacles.push(o);
     box(roof, teal, [o.x, o.h / 2, o.z], [o.w, o.h, o.d]);
-    for (let i = 0; i < 3; i++)
+    for (let i = 0; i < 9; i++)
       box(
         roof,
         gold,
-        [o.x + (i - 1) * 0.3, o.h + 0.02, o.z],
-        [0.07, 0.03, o.d],
+        [o.x, o.h * 0.2 + i * 0.1, o.z + o.d / 2 + 0.015],
+        [o.w * 0.85, 0.035, 0.03],
       );
+    const fan = mesh(roof, new T.CylinderGeometry(0.4, 0.4, 0.06, 24), dark, [
+      o.x,
+      o.h + 0.04,
+      o.z,
+    ]);
+    for (let i = 0; i < 4; i++) {
+      const blade = box(
+        roof,
+        gold,
+        [o.x, o.h + 0.08, o.z],
+        [0.65, 0.015, 0.06],
+      );
+      blade.rotation.y = (i * Math.PI) / 4;
+    }
   }
+  for (const x of [-16, 16]) lamp(roof, x, 7, 2.8);
+  lamp(roof, 6, -7, 2.8);
+  batchArchitecture(roof);
   const heli = helicopter();
-  heli.position.set(-6, 0.5, -1);
+  heli.position.set(-6, 0.01, -1);
   heli.rotation.y = 0.4;
   roof.add(heli);
   const city = new T.Group();
@@ -247,56 +304,9 @@ export function createWorld(canvas) {
     [-35, 29, -65],
     [3, 3, 3],
   );
-  const rainData = new Float32Array(600 * 6);
-  for (let i = 0; i < 600; i++) {
-    const x = ((i * 17.17) % 44) - 22,
-      y = (i * 1.33) % 28,
-      z = ((i * 9.31) % 40) - 20;
-    rainData.set([x, y, z, x - 0.12, y - 0.65, z + 0.04], i * 6);
-  }
-  const rainGeo = new T.BufferGeometry();
-  rainGeo.setAttribute("position", new T.BufferAttribute(rainData, 3));
-  const rain = new T.LineSegments(
-    rainGeo,
-    new T.LineBasicMaterial({
-      color: "#a4b4be",
-      transparent: true,
-      opacity: 0.22,
-    }),
-  );
-  roof.add(rain);
-  const wet = new T.MeshPhysicalMaterial({
-    color: "#26353e",
-    metalness: 0.4,
-    roughness: 0.08,
-    clearcoat: 1,
-    transparent: true,
-    opacity: 0.52,
-  });
-  for (let i = 0; i < 12; i++) {
-    const outline = new T.Shape();
-    for (let j = 0; j <= 36; j++) {
-      const angle = (j / 36) * Math.PI * 2,
-        radius =
-          0.85 +
-          Math.sin(angle * 3 + i) * 0.09 +
-          Math.sin(angle * 7 - i) * 0.06,
-        x = Math.cos(angle) * radius,
-        y = Math.sin(angle) * radius;
-      if (j === 0) outline.moveTo(x, y);
-      else outline.lineTo(x, y);
-    }
-    const puddle = mesh(
-      roof,
-      new T.ShapeGeometry(outline),
-      wet,
-      [-11 + ((i * 3.31) % 23), 0.041, -8 + ((i * 4.13) % 17)],
-      [1.1 + (i % 3) * 0.6, 0.5 + (i % 2) * 0.4, 1],
-    );
-    puddle.rotation.x = -Math.PI / 2;
-    puddle.rotation.z = i * 0.7;
-    puddle.castShadow = false;
-  }
+  const storm = createStorm(roof),
+    rain = storm.rain,
+    rainData = storm.data;
 
   const player = explorer();
   scene.add(player);
@@ -334,21 +344,17 @@ export function createWorld(canvas) {
       scene.background.set(room === "roof" ? "#10171c" : "#10191e");
     },
     animate(time, dt, room) {
-      if (!heli.userData.damaged) {
-        heli.userData.rotor.rotation.y += dt * 30;
-        heli.userData.tailRotor.rotation.x += dt * 45;
-      } else {
-        heli.userData.rotor.rotation.y += dt * 1.5;
-        heli.userData.tailRotor.rotation.x += dt * 2;
-      }
-      if (room === "roof") {
-        for (let i = 1; i < rainData.length; i += 6) {
-          rainData[i] -= dt * 15;
-          if (rainData[i] < 0) rainData[i] = 25;
-          rainData[i + 3] = rainData[i] - 0.65;
-        }
-        rain.geometry.attributes.position.needsUpdate = true;
-      }
+      const desired = heli.userData.damaged ? 0 : 34;
+      heli.userData.rotorSpeed = T.MathUtils.damp(
+        heli.userData.rotorSpeed,
+        desired,
+        0.32,
+        dt,
+      );
+      heli.userData.rotor.rotation.y += dt * heli.userData.rotorSpeed;
+      heli.userData.tailRotor.rotation.x += dt * heli.userData.rotorSpeed * 4;
+      heli.userData.posePilot();
+      if (room === "roof") storm.update(time, dt, heli);
     },
   };
 }

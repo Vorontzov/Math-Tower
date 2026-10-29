@@ -898,3 +898,12 @@ dialog h2 {
     bottom: 42%;
   }
 }
+@media (max-width: 700px) {
+  .objective {
+    width: calc(50vw - 18px);
+    max-width: 190px;
+    right: auto;
+    bottom: 132px;
+    padding: 12px;
+  }
+}

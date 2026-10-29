@@ -1,4 +1,12 @@
+import { landingMotion } from "./weather.js";
+import {
+  nextTechnique,
+  martialTarget,
+  poseTechnique,
+  animateKnockout,
+} from "./martial.js";
 import * as T from "../../vendor/three.module.js";
+import { BUILDING, stairSurface } from "./architecture.js";
 import { createWorld } from "./world.js";
 import { buildRoom, buildCampus } from "./rooms.js";
 import {
@@ -35,6 +43,7 @@ import {
   traceShot,
   shoveTarget,
   updateThreat,
+  advanceDart,
   moveBody,
   STUN_RANGE,
   STUN_COOLDOWN,
@@ -83,7 +92,13 @@ function start() {
     priorMode = "play",
     question = null,
     progress = null,
-    activeGate = null;
+    activeGate = null,
+    cameraYaw = 0.6,
+    stairContext = null,
+    stairWarning = 0,
+    martialMove = null,
+    martialCooldown = 0;
+  const darts = [];
   let reduced = matchMedia("(prefers-reduced-motion: reduce)").matches,
     voice = false;
   const cameraTarget = new T.Vector3(),
@@ -139,7 +154,14 @@ function start() {
         film?.originalPosition ||
         ride?.originalPosition ||
         world.player.position;
-      save.position = { x: p.x, z: p.z };
+      save.position = stairContext
+        ? {
+            x: BUILDING.stairs.find((c) => c.id === stairContext.id).x,
+            z:
+              BUILDING.stairs.find((c) => c.id === stairContext.id).z -
+              BUILDING.stairs.find((c) => c.id === stairContext.id).sign * 0.7,
+          }
+        : { x: p.x, z: p.z };
     }
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify(save));
@@ -228,6 +250,14 @@ function start() {
     companion = null;
   }
   function loadFloor(index, position = null) {
+    for (const dart of darts) {
+      world.scene.remove(dart.mesh);
+      dart.mesh.geometry.dispose();
+      dart.mesh.material.dispose();
+    }
+    darts.length = 0;
+    stairContext = null;
+    martialMove = null;
     room?.dispose();
     campus?.dispose();
     campus = null;
@@ -260,9 +290,7 @@ function start() {
       world.scene.add(companion);
     }
     if (index === 0)
-      world.roofDoors.forEach(
-        (d) => (d.leaf.position.y = save.solved.includes("roof") ? 3.65 : 1.2),
-      );
+      world.roofDoors.forEach((d) => d.setOpen?.(save.solved.includes("roof")));
     updateHud();
   }
   function offerEntry() {
@@ -380,8 +408,10 @@ function start() {
     film = null;
     sound.silence();
     world.player.visible = true;
-    world.heli.position.y = 0.5;
+    world.heli.position.y = 0.01;
     world.heli.rotation.z = 0;
+    world.heli.rotation.x = 0;
+    world.heli.userData.pilot.rotation.x = 0;
     world.heli.userData.damaged = true;
     world.facadeLight.emissiveIntensity = 0.05;
     world.renderer.toneMappingExposure = 1.08;
@@ -404,9 +434,13 @@ function start() {
     }
     world.player.position.copy(originalPosition);
     room.enemies.forEach((e) => {
-      e.visible = !e.userData.disabled;
+      e.visible = true;
       if (e.userData.home)
-        e.position.set(e.userData.home.x, 0, e.userData.home.z);
+        e.position.set(
+          e.userData.home.x,
+          e.userData.home.y || 0,
+          e.userData.home.z,
+        );
     });
     room.features.memoryActors?.forEach((p) => (p.visible = false));
     if (room.features.watcher && save.floor === 13)
@@ -421,7 +455,7 @@ function start() {
     $("world").focus();
     if (name === "arrival")
       toast(
-        "Face the figure and press X to fire. Q turns around. Reach the door terminal; math pauses danger.",
+        "X fires · Q turns · F performs a takedown. Z/V turns the camera. Reach the access terminal; math pauses danger.",
       );
     if (name === "skitters")
       toast(
@@ -455,8 +489,28 @@ function start() {
       f = T.MathUtils.smoothstep(film.elapsed / duration, 0, 1);
     cameraTarget.fromArray(shot.camera);
     if (!reduced) cameraTarget.lerp(new T.Vector3(...shot.end), f);
-    world.camera.position.copy(cameraTarget);
     look.fromArray(shot.target);
+    if (save.floor > 0 && !campus) {
+      look.y = Math.min(2.2, Math.max(0.8, look.y));
+      cameraTarget.y = Math.min(2.7, Math.max(1.6, cameraTarget.y));
+      const v = cameraTarget.clone().sub(look),
+        d = Math.hypot(v.x, v.z);
+      if (d > 0) {
+        const distance = Math.max(
+          0.6,
+          rayWall(
+            look,
+            { x: v.x / d, z: v.z / d },
+            Math.min(d, 6),
+            room.colliders,
+            1.7,
+          ) - 0.2,
+        );
+        cameraTarget.x = look.x + (v.x / d) * distance;
+        cameraTarget.z = look.z + (v.z / d) * distance;
+      }
+    }
+    world.camera.position.copy(cameraTarget);
     world.camera.lookAt(look);
     world.player.visible = !["landing", "approach", "blackout"].includes(
       shot.action,
@@ -472,7 +526,7 @@ function start() {
         threat.visible = ["roof-threat", "equip", "handoff"].includes(
           shot.action,
         );
-        animatePresence(threat, time, 0.15);
+        animatePresence(threat, time, 0);
         threat.rotation.y = Math.atan2(
           -6 - threat.position.x,
           4 - threat.position.z,
@@ -494,12 +548,30 @@ function start() {
     if (shot.action === "approach") {
       world.heli.userData.damaged = false;
       world.facadeLight.emissiveIntensity = 0.5;
-      world.heli.position.y = 11 + Math.sin(time) * 0.15;
+      world.heli.position.y = 9 + Math.sin(time) * 0.15;
     }
     if (shot.action === "landing") {
-      world.heli.position.y = 0.5 + (1 - f) * 11;
-      world.heli.rotation.z = reduced ? 0 : Math.sin(f * 20) * (1 - f) * 0.14;
-      if (f > 0.8) world.heli.userData.damaged = true;
+      const motion = landingMotion(f, reduced);
+      world.heli.position.y = motion.y;
+      world.heli.rotation.z = motion.roll;
+      world.heli.rotation.x = motion.pitch;
+      world.heli.userData.pilot.rotation.x = -motion.pitch * 0.5;
+      if (motion.contact) {
+        world.heli.userData.damaged = true;
+        if (!film.landingHit) {
+          sound.tone("hurt");
+          film.landingHit = true;
+        }
+      }
+    }
+    if (["approach", "blackout", "landing"].includes(shot.action)) {
+      const h = world.heli.position;
+      world.camera.position.set(
+        h.x + (shot.action === "landing" ? 5.5 : 8),
+        h.y + (shot.action === "landing" ? 2.8 : 4),
+        h.z + (shot.action === "landing" ? 7 : 10),
+      );
+      world.camera.lookAt(h.x, h.y + 1.4, h.z);
     }
     if (shot.action === "greeting" && features.robot)
       features.robot.userData.arms[0].rotation.z =
@@ -516,7 +588,7 @@ function start() {
           world.player.position.x - e.position.x,
           world.player.position.z - e.position.z,
         );
-        animatePresence(e, time, 0.3);
+        animatePresence(e, time, 0);
       });
     if (shot.action === "expand" && features.expansion)
       features.expansion.rotation.y = Math.sin(f * Math.PI) * 0.04;
@@ -665,7 +737,7 @@ function start() {
       persist();
       toast(
         t.id === "receptionSecured"
-          ? "Badge recovered. Door sealed behind you. The figure is still on this floor — head down."
+          ? "Badge recovered. Door sealed behind you. The android is still on this floor — head down."
           : "Emergency route released. The alarm distracts the patrol briefly. Take Stair B down.",
       );
     } else if (t.kind === "record") {
@@ -800,6 +872,16 @@ function start() {
       );
   }
   function openLift(id) {
+    const car = room.root.userData.lifts?.[id];
+    if (car && world.player.position.z > car.position.z - 0.45) {
+      car.userData.targetOpen = 1;
+      toast(
+        "Lift " +
+          id +
+          " has arrived. Walk into the car; press E at its controls to select a floor.",
+      );
+      return;
+    }
     const lift = adventure.lifts.find((l) => l.id === id);
     const options = lift.stops
       .filter((i) => i !== save.floor)
@@ -830,47 +912,50 @@ function start() {
       toast(reason);
       return;
     }
-    const p = world.player.position.clone();
+    if (kind === "stairs") {
+      toast(
+        (destination < save.floor
+          ? "Take the left-hand ascending flight"
+          : "Take the right-hand descending flight") +
+          ". Walk each flight and turn across the landing.",
+      );
+      return;
+    }
+    if (kind === "ladder") {
+      // Existing optional maintenance shaft.
+      ride = {
+        destination,
+        kind,
+        id,
+        elapsed: 0,
+        originalPosition: world.player.position.clone(),
+      };
+      setMode("travel");
+      return;
+    }
+    const car = room.root.userData.lifts?.[id];
+    if (!car) return;
     ride = {
       destination,
       kind,
       id,
+      car,
       elapsed: 0,
-      originalPosition: p,
-      car: null,
+      originalPosition: world.player.position.clone(),
+      duration: 2.8 + Math.abs(destination - save.floor) * 0.45,
     };
     setMode("travel");
-    $("speaker").textContent =
-      kind === "lift"
-        ? "LIFT " + id
-        : kind === "ladder"
-          ? "MAINTENANCE SHAFT"
-          : "SERVICE STAIRS";
+    $("speaker").textContent = "LIFT " + id;
     $("line").textContent =
-      floorName(save.floor) + " → " + floorName(destination);
-    if (kind === "lift") {
-      const car = new T.Group();
-      car.position.copy(p);
-      const metal = mat("#41616b"),
-        brass = mat("#cdb075", 0.4, 0.6);
-      box(car, metal, [0, -0.1, 0], [3, 0.2, 3]);
-      box(car, metal, [0, 1.6, -1.5], [3, 3.4, 0.1]);
-      for (const x of [-1.5, 1.5]) box(car, brass, [x, 1.4, 0], [0.1, 3, 3]);
-      world.scene.add(car);
-      ride.car = car;
-      world.player.rotation.y = 0.5;
-    }
+      floorName(save.floor) +
+      " → " +
+      floorName(destination) +
+      " · doors closing";
+    car.userData.targetOpen = 0;
     sound.tone("jump");
   }
   function finishTravel() {
-    const { destination, kind, id, car } = ride;
-    if (car) {
-      world.scene.remove(car);
-      car.traverse((o) => {
-        o.geometry?.dispose();
-        o.material?.dispose();
-      });
-    }
+    const { destination, kind, id } = ride;
     ride = null;
     const reason = travel(save, destination, kind, id);
     if (reason) {
@@ -879,29 +964,76 @@ function start() {
       return;
     }
     loadFloor(destination, save.position);
+    if (kind === "lift") {
+      const car = room.root.userData.lifts?.[id];
+      if (car) {
+        car.userData.open = 0;
+        car.userData.targetOpen = 1;
+        car.userData.setOpen(0);
+        world.player.position.set(car.position.x, 0, car.position.z - 1.45);
+      }
+    }
     setMode("play");
     persist();
     offerEntry();
   }
   function travelFrame(dt) {
     ride.elapsed += dt;
-    const p = ride.originalPosition,
-      f = Math.min(1, ride.elapsed / (ride.kind === "lift" ? 1.8 : 1));
-    if (ride.car) {
-      world.player.position.y = Math.sin(f * Math.PI) * 0.12;
-      world.camera.position.set(p.x + 4, p.y + 3, p.z + 6);
-      world.camera.lookAt(p.x, 1.5, p.z);
-      ride.car.children[1].position.y = 1.6 + Math.sin(f * 10) * 0.08;
-    } else {
-      const direction = ride.id === "A" ? 1 : -1;
-      faceMovement(world.player, 0, direction);
-      animateExplorer(world.player, time, 0.7);
-      poseCombat(world.player, time);
-      world.player.position.z = p.z + direction * f * 0.7;
-      world.player.position.y =
-        save.floor === 0 ? 0 : (ride.destination > save.floor ? -0.5 : 0.5) * f;
+    if (ride.kind === "ladder") {
+      world.player.position.y = Math.min(3.8, ride.elapsed * 1.1);
+      animateExplorer(world.player, time, 0.3);
+      if (ride.elapsed > 3.5) finishTravel();
+      return;
     }
-    if (f === 1) finishTravel();
+    const car = ride.car,
+      t = ride.elapsed,
+      close = T.MathUtils.clamp(1 - t, 0, 1);
+    car.userData.setOpen(
+      t < 1 ? close : t > ride.duration ? Math.min(1, t - ride.duration) : 0,
+    );
+    // The passenger stays inside the actual cabin. Closed doors conceal the shaft
+    // streaming; the illuminated indicator, motor and suspension communicate travel.
+    world.player.position.x = T.MathUtils.clamp(
+      world.player.position.x,
+      car.position.x - 0.8,
+      car.position.x + 0.8,
+    );
+    world.player.position.z = T.MathUtils.clamp(
+      world.player.position.z,
+      car.position.z - 2.3,
+      car.position.z - 0.6,
+    );
+    animateExplorer(world.player, time, 0);
+    poseCombat(world.player, time);
+    const shake = reduced
+      ? 0
+      : t > 1 && t < ride.duration
+        ? Math.sin(t * 29) * 0.006
+        : 0;
+    world.camera.position.set(
+      car.position.x + 0.8,
+      1.92 + shake,
+      car.position.z - 0.25,
+    );
+    world.camera.lookAt(car.position.x, 1.25, car.position.z - 1.7);
+    $("line").textContent =
+      floorName(save.floor) +
+      " → " +
+      floorName(ride.destination) +
+      (t < 1
+        ? " · doors closing"
+        : t < ride.duration
+          ? " · travelling"
+          : " · arrived");
+    const index = Math.round(
+      T.MathUtils.lerp(
+        save.floor,
+        ride.destination,
+        T.MathUtils.clamp((t - 1) / (ride.duration - 1), 0, 1),
+      ),
+    );
+    car.userData.setFloor(index > 17 ? "B" + (index - 17) : String(18 - index));
+    if (t >= ride.duration) finishTravel();
   }
 
   function openMath(gate) {
@@ -1004,8 +1136,7 @@ function start() {
       const position = world.player.position.clone();
       loadFloor(save.floor, position);
       runFilm("escape");
-    } else if (id === "roof")
-      world.roofDoors.forEach((d) => (d.leaf.position.y = 3.65));
+    } else if (id === "roof") world.roofDoors.forEach((d) => d.setOpen(true));
     else if (id === "lights" && room.features.expansion)
       room.features.expansion.rotation.y = 0;
     $("world").focus();
@@ -1098,6 +1229,7 @@ function start() {
     status.dataset.ready = String(shotCooldown === 0);
   }
   function attack(close = false) {
+    if (martialMove) return;
     if (mode !== "play" || (close ? shoveCooldown : shotCooldown) > 0) return;
     if (close) {
       shoveCooldown = 0.8;
@@ -1152,10 +1284,11 @@ function start() {
       room.enemies,
       room.colliders,
       save.flags.guidebot ? 10 : STUN_RANGE,
+      world.player.userData.aimPitch || 0,
     );
     shotLine.geometry.setFromPoints([
       origin,
-      new T.Vector3(hit.end.x, origin.y, hit.end.z),
+      new T.Vector3(hit.end.x, hit.end.y, hit.end.z),
     ]);
     shotLine.material.opacity = 1;
     noise = { x: world.player.position.x, z: world.player.position.z };
@@ -1163,15 +1296,37 @@ function start() {
       hit.enemy.userData.stun = 4;
       hit.enemy.userData.windup = hit.enemy.userData.rush = 0;
       toast("Direct hit. Four seconds to get clear.");
-    } else toast("Shot missed or blocked. Aim at the figure before firing.");
+    } else toast("Shot missed or blocked. Aim at the android before firing.");
     sound.tone("stun");
     weaponStatus();
   }
+  function martial() {
+    if (martialMove || martialCooldown > 0) return;
+    const enemy = martialTarget(
+      world.player.position,
+      world.player.rotation.y,
+      room.enemies,
+      room.colliders,
+    );
+    if (!enemy) {
+      toast("Face an android within two steps, then press F for a takedown.");
+      return;
+    }
+    const technique = nextTechnique(save.techniqueCount, save.seed);
+    save.techniqueCount = (save.techniqueCount || 0) + 1;
+    martialMove = { enemy, technique, start: time, hit: false };
+    martialCooldown = 1.7;
+    enemy.userData.stun = 1.4;
+    enemy.userData.windup = 0;
+    toast(technique.name + " — " + technique.line);
+    sound.tone("shove");
+  }
   function press(code) {
     if (mode === "play") {
-      if (code === "Space") jump();
+      if (code === "Space" && !stairContext && !martialMove) jump();
       if (code === "KeyX") attack();
       if (code === "KeyC") attack(true);
+      if (code === "KeyF") martial();
       if (code === "KeyE") interact();
       if (code === "KeyQ") {
         world.player.rotation.y += Math.PI;
@@ -1226,10 +1381,15 @@ function start() {
       button.addEventListener(event, () => keys.delete(button.dataset.key));
   });
   const aimRay = new T.Raycaster(),
-    ground = new T.Plane(new T.Vector3(0, 1, 0), 0),
+    ground = new T.Plane(new T.Vector3(0, 1, 0), -1.3),
     aimPoint = new T.Vector3();
   function aimAtPointer(e) {
     if (mode !== "play" || e.pointerType !== "mouse") return;
+    if (e.buttons === 2) {
+      cameraYaw -= e.movementX * 0.005;
+      return;
+    }
+    ground.constant = -(world.player.position.y + 1.3);
     const rect = $("world").getBoundingClientRect();
     aimRay.setFromCamera(
       new T.Vector2(
@@ -1238,7 +1398,18 @@ function start() {
       ),
       world.camera,
     );
-    if (aimRay.ray.intersectPlane(ground, aimPoint)) {
+    const bodies = room.enemies.filter((e) => !e.userData.disabled),
+      hits = aimRay.intersectObjects(bodies, true);
+    const hit = hits[0];
+    if (hit) aimPoint.copy(hit.point);
+    if (hit || aimRay.ray.intersectPlane(ground, aimPoint)) {
+      const p = world.player.position;
+      world.player.userData.aimPitch = hit
+        ? Math.atan2(
+            aimPoint.y - p.y - 1.35,
+            Math.hypot(aimPoint.x - p.x, aimPoint.z - p.z),
+          )
+        : 0;
       faceMovement(
         world.player,
         aimPoint.x - world.player.position.x,
@@ -1247,6 +1418,7 @@ function start() {
       world.player.userData.aiming = true;
     }
   }
+  $("world").addEventListener("contextmenu", (e) => e.preventDefault());
   $("world").addEventListener("pointermove", aimAtPointer);
   $("world").addEventListener("pointerdown", (e) => {
     if (e.pointerType === "mouse" && e.button === 0 && mode === "play") {
@@ -1271,15 +1443,16 @@ function start() {
   window.addEventListener("resize", world.resize);
   function blocked(x, z, y) {
     return (
-      x < -13.2 ||
-      x > 13.2 ||
-      z < -10.5 ||
-      z > 10.5 ||
+      x < -17.2 ||
+      x > 17.2 ||
+      z < -15.2 ||
+      z > 15.2 ||
       room.colliders.some(
         (o) =>
           Math.abs(x - o.x) < o.w / 2 + 0.3 &&
           Math.abs(z - o.z) < o.d / 2 + 0.3 &&
-          y < o.h,
+          o.h > 0 &&
+          (stairContext ? o.h >= 8 : y < o.h),
       )
     );
   }
@@ -1315,6 +1488,7 @@ function start() {
     persist();
   }
   function simulation(dt) {
+    martialCooldown = Math.max(0, martialCooldown - dt);
     shotCooldown = Math.max(0, shotCooldown - dt);
     shoveCooldown = Math.max(0, shoveCooldown - dt);
     companionCooldown = Math.max(0, companionCooldown - dt);
@@ -1327,13 +1501,21 @@ function start() {
       z =
         Number(keys.has("KeyS") || keys.has("ArrowDown")) -
         Number(keys.has("KeyW") || keys.has("ArrowUp"));
+    if (martialMove) {
+      x = 0;
+      z = 0;
+    }
     const len = Math.hypot(x, z);
     if (len) {
       x /= len;
       z /= len;
     }
-    const dx = (x * 0.825 + z * 0.565) * 5.3 * dt,
-      dz = (-x * 0.565 + z * 0.825) * 5.3 * dt;
+    cameraYaw +=
+      (Number(keys.has("KeyV")) - Number(keys.has("KeyZ"))) * dt * 1.6;
+    const walking = stairContext ? 1.65 : 4.1;
+    const dx =
+        (x * Math.cos(cameraYaw) + z * Math.sin(cameraYaw)) * walking * dt,
+      dz = (-x * Math.sin(cameraYaw) + z * Math.cos(cameraYaw)) * walking * dt;
     const beforeX = p.x,
       beforeZ = p.z;
     const turnLock = time < (world.player.userData.turnUntil ?? -100);
@@ -1349,17 +1531,89 @@ function start() {
     const movedX = p.x - beforeX,
       movedZ = p.z - beforeZ;
     faceMovement(world.player, movedX, movedZ);
-    vy -= 18 * dt;
-    p.y = Math.max(0, p.y + vy * dt);
-    if (p.y === 0) vy = 0;
+    if (len) world.player.userData.aimPitch = 0;
+    const surface = stairSurface(p, stairContext);
+    if (surface.context && !stairContext) {
+      const destination = save.floor - surface.context.direction;
+      const reason =
+        destination < 0 || destination > 20
+          ? "This is the end of the stairwell."
+          : travelBlock(save, destination, "stairs", surface.context.id);
+      if (reason) {
+        p.x = beforeX;
+        p.z = beforeZ;
+        if (time > stairWarning) {
+          toast(reason);
+          stairWarning = time + 3;
+        }
+        surface.context = null;
+        surface.height = 0;
+      }
+    }
+    if (surface.context) {
+      stairContext = surface.context;
+      p.y = surface.height;
+      vy = 0;
+      if (surface.completed) {
+        const id = stairContext.id,
+          destination = save.floor - stairContext.direction;
+        const reason = travel(save, destination, "stairs", id);
+        if (!reason) {
+          const direction = stairContext.direction;
+          world.camera.position.y -= direction * 3.9;
+          look.y -= direction * 3.9;
+          loadFloor(destination, { x: p.x, z: p.z });
+          stairContext = { id, direction: -direction };
+          setMode("play");
+          persist();
+          offerEntry();
+          return;
+        }
+      }
+    } else {
+      stairContext = null;
+      vy -= 18 * dt;
+      p.y = Math.max(0, p.y + vy * dt);
+      if (p.y === 0) vy = 0;
+    }
+    world.player.userData.walking = !!stairContext;
     animateExplorer(
       world.player,
       time,
-      dt ? Math.hypot(movedX, movedZ) / (dt * 5.3) : 0,
+      dt ? Math.hypot(movedX, movedZ) / (dt * (stairContext ? 1 : 4.1)) : 0,
       p.y,
     );
     poseCombat(world.player, time);
     world.player.userData.weapon.gun.visible = true;
+    if (martialMove) {
+      poseTechnique(world.player, martialMove, time);
+      if (time - martialMove.start > 0.48 && !martialMove.hit) {
+        martialMove.hit = true;
+        const e = martialMove.enemy;
+        e.userData.disabled = true;
+        e.userData.knockedAt = time;
+        e.userData.throwDown = ["throw", "reap", "wheel"].includes(
+          martialMove.technique.style,
+        );
+        e.userData.fallDirection = {
+          x: Math.sin(world.player.rotation.y),
+          z: Math.cos(world.player.rotation.y),
+        };
+        save.defeated ||= [];
+        if (
+          e.userData.encounterId &&
+          !save.defeated.includes(e.userData.encounterId)
+        )
+          save.defeated.push(e.userData.encounterId);
+        sound.tone("shove");
+        persist();
+      }
+      if (time - martialMove.start > 1.15) {
+        world.player.userData.human.model.position.set(0, 0, 0);
+        world.player.userData.human.model.rotation.set(0, 0, 0);
+        martialMove = null;
+      }
+    }
     world.player.visible = true;
     room.collectibles.forEach(({ group, id }) => {
       if (
@@ -1384,22 +1638,78 @@ function start() {
         noise,
         early: save.floor < 4,
         escape: save.escape,
+        stairCore: stairContext,
       });
-      if (e.userData.disabled) return;
+      if (e.userData.disabled) {
+        animateKnockout(e, time, room.colliders);
+        return;
+      }
       animatePresence(e, time, motion.speed);
-      if (
-        e.userData.state === "pursuing" ||
-        e.userData.state === "winding" ||
-        e.userData.state === "rushing"
-      )
-        pursuing++;
-      if (motion.attack) hurt();
+      if (e.userData.laser) {
+        const length = rayWall(
+          e.position,
+          { x: Math.sin(e.rotation.y), z: Math.cos(e.rotation.y) },
+          7,
+          room.colliders,
+          e.position.y + 1.35,
+        );
+        e.userData.laser.scale.z = Math.max(0.01, length / 7);
+      }
+      if (e.userData.aiming)
+        e.userData.aimPitch = Math.atan2(
+          p.y - e.position.y,
+          Math.max(1, Math.hypot(p.x - e.position.x, p.z - e.position.z)),
+        );
+      if (e.userData.alert > 0) pursuing++;
+      if (motion.shot) {
+        e.userData.fireStart = time;
+        const muzzle = e.userData.weapon.muzzle.getWorldPosition(
+          new T.Vector3(),
+        );
+        const geometry = new T.CylinderGeometry(0.025, 0.025, 0.5, 6),
+          material = new T.MeshBasicMaterial({ color: "#f4c68a" });
+        const bolt = new T.Mesh(geometry, material);
+        world.scene.add(bolt);
+        const direction = motion.shot.direction;
+        direction.y =
+          (p.y + 1.2 - muzzle.y) /
+          Math.max(1, Math.hypot(p.x - muzzle.x, p.z - muzzle.z));
+        darts.push({
+          x: muzzle.x,
+          z: muzzle.z,
+          y: muzzle.y,
+          direction,
+          remaining: 16,
+          mesh: bolt,
+        });
+      }
     });
+    for (let i = darts.length - 1; i >= 0; i--) {
+      const d = darts[i],
+        result = advanceDart(d, dt, p, room.colliders);
+      d.y += (d.direction.y || 0) * 12 * dt;
+      d.mesh.position.set(d.x, d.y, d.z);
+      d.mesh.quaternion.setFromUnitVectors(
+        new T.Vector3(0, 1, 0),
+        new T.Vector3(
+          d.direction.x,
+          d.direction.y || 0,
+          d.direction.z,
+        ).normalize(),
+      );
+      if (result.hit) hurt();
+      if (result.done) {
+        world.scene.remove(d.mesh);
+        d.mesh.geometry.dispose();
+        d.mesh.material.dispose();
+        darts.splice(i, 1);
+      }
+    }
     noise = null;
     $("threat-status").textContent = pursuing
-      ? `PURSUIT · ${pursuing} ${pursuing === 1 ? "figure" : "figures"}`
+      ? `ANDROID ALERT · ${pursuing}`
       : room.enemies.some((e) => !e.userData.disabled)
-        ? "FOOTSTEPS NEARBY"
+        ? "SECURITY PATROL NEARBY"
         : "AREA QUIET";
     $("threat-status").dataset.alert = String(pursuing > 0);
     room.features.steam?.forEach((s) => {
@@ -1411,6 +1721,7 @@ function start() {
         hurt();
     });
     if (companion) {
+      const companionBefore = companion.position.clone();
       const target = p.clone().add(new T.Vector3(-1.3, 0, 1.2)),
         distance = companion.position.distanceTo(target);
       if (distance > 1) {
@@ -1432,7 +1743,11 @@ function start() {
           companion.position.z - before.z,
         );
       }
-      animateExplorer(companion, time, distance > 1 ? 1 : 0);
+      animateExplorer(
+        companion,
+        time,
+        dt ? companion.position.distanceTo(companionBefore) / dt / 5 : 0,
+      );
     }
     if (save.escape && room.features.watcher)
       room.features.watcher.position.z = -7 + Math.sin(time * 0.15) * 1.5;
@@ -1475,10 +1790,45 @@ function start() {
     else if (mode === "play") {
       simulation(dt);
       const p = world.player.position;
-      lookTarget.set(p.x, 1.3, p.z);
-      cameraTarget.copy(lookTarget).add(new T.Vector3(8, 9, 12));
-      if (world.camera.aspect < 0.8) cameraTarget.add(new T.Vector3(3, 5, 5));
-      const speed = reduced ? 1 : Math.min(1, dt * 2.8);
+      lookTarget.set(p.x, p.y + 1.5, p.z);
+      const dir = { x: Math.sin(cameraYaw), z: Math.cos(cameraYaw) };
+      const distance = Math.max(
+        0.35,
+        rayWall(
+          p,
+          dir,
+          save.floor === 0 && !stairContext ? 6 : 3.6,
+          room.colliders,
+          1.7,
+        ) - 0.22,
+      );
+      cameraTarget.set(
+        p.x + dir.x * distance,
+        p.y + (save.floor === 0 && !stairContext ? 3.2 : 2.22),
+        p.z + dir.z * distance,
+      );
+      if (stairContext) {
+        const c = BUILDING.stairs.find((c) => c.id === stairContext.id);
+        cameraTarget.x = T.MathUtils.clamp(
+          p.x + dir.x * 2.1,
+          c.x - 1.35,
+          c.x + 1.35,
+        );
+        const localZ = T.MathUtils.clamp(
+          (p.z - c.z) * c.sign + dir.z * c.sign * 2.1,
+          0.25,
+          5.35,
+        );
+        cameraTarget.z = c.z + localZ * c.sign;
+        cameraTarget.y = p.y + 2.25;
+        lookTarget.y = p.y + 0.92;
+      }
+      const fov = stairContext ? 76 : 62;
+      if (world.camera.fov !== fov) {
+        world.camera.fov = fov;
+        world.camera.updateProjectionMatrix();
+      }
+      const speed = reduced ? 1 : Math.min(1, dt * 9);
       world.camera.position.lerp(cameraTarget, speed);
       look.lerp(lookTarget, speed);
       world.camera.lookAt(look);
@@ -1486,8 +1836,8 @@ function start() {
       world.player.visible = true;
       animateExplorer(world.player, time);
       poseCombat(world.player, time);
-      world.camera.position.set(15 + Math.sin(time * 0.12) * 1.5, 9, 17);
-      world.camera.lookAt(0, 1.5, -1);
+      world.camera.position.set(6 + Math.sin(time * 0.12) * 0.3, 2.1, 8);
+      world.camera.lookAt(0, 1.3, -3);
     }
     if (toastClock > 0 && mode === "play") {
       toastClock -= dt;

@@ -1,3 +1,4 @@
+import { batchArchitecture } from "./static-geometry.js";
 import * as T from "../../vendor/three.module.js";
 import { GLTFLoader } from "../../vendor/addons/loaders/GLTFLoader.js";
 import { clone as cloneSkeleton } from "../../vendor/addons/utils/SkeletonUtils.js";
@@ -9,13 +10,19 @@ const humanAssets = {};
 export async function loadHumanAsset() {
   const loader = new GLTFLoader();
   const assets = await Promise.all(
-    ["explorer", "researcher", "mara"].map((name) =>
+    ["explorer", "researcher", "mara", "android", "helicopter"].map((name) =>
       loader.loadAsync(
         new URL(`../../assets/realism/${name}.glb`, import.meta.url).href,
       ),
     ),
   );
-  [humanAssets.explorer, humanAssets.researcher, humanAssets.mara] = assets;
+  [
+    humanAssets.explorer,
+    humanAssets.researcher,
+    humanAssets.mara,
+    humanAssets.android,
+    humanAssets.helicopter,
+  ] = assets;
 }
 
 export function mesh(
@@ -175,7 +182,11 @@ export function animateExplorer(
   }
   const human = root.userData.human;
   if (human) {
-    const desired = speed > 0.1 ? "Run" : "Idle";
+    const walking = root.userData.role === "android" || root.userData.walking;
+    const desired =
+      speed > (walking ? 0.025 : 0.1) ? (walking ? "Walk" : "Run") : "Idle";
+    if (walking && human.actions.Walk)
+      human.actions.Walk.timeScale = Math.max(0.25, speed / 1.35);
     if (desired !== human.current) {
       human.actions[human.current]?.fadeOut(0.18);
       human.actions[desired]?.reset().fadeIn(0.18).play();
@@ -453,143 +464,158 @@ export function animateSkitter(
 }
 
 export function helicopter() {
-  const g = new T.Group(),
-    navy = mat("#233b47", 0.45, 0.5),
-    glass = new T.MeshPhysicalMaterial({
-      color: "#172b38",
-      roughness: 0.12,
-      metalness: 0.5,
-      clearcoat: 1,
-      side: T.DoubleSide,
-    }),
-    brass = mat("#777e7c", 0.3, 0.6),
-    black = mat("#18222b");
-  ball(g, navy, [0, 1, 0], [1.25, 0.95, 2]);
-  ball(g, navy, [0, 0.82, 1.32], [1.05, 0.65, 0.95]);
-  function pane(points) {
-    const geo = new T.BufferGeometry();
-    geo.setAttribute(
-      "position",
-      new T.Float32BufferAttribute(points.flat(), 3),
-    );
-    geo.setIndex([0, 1, 2, 0, 2, 3]);
-    geo.computeVertexNormals();
-    mesh(g, geo, glass);
-    for (let i = 0; i < 4; i++)
-      rod(g, black, points[i], points[(i + 1) % 4], 0.035);
-  }
-  pane([
-    [-0.94, 1.04, 2],
-    [0.94, 1.04, 2],
-    [0.7, 1.84, 1.2],
-    [-0.7, 1.84, 1.2],
-  ]);
-  rod(g, black, [0, 1.04, 2.02], [0, 1.84, 1.22], 0.045);
-  for (const side of [-1, 1]) {
-    pane([
-      [side * 1.22, 1, -0.65],
-      [side * 1.22, 1, 0.65],
-      [side * 0.93, 1.79, 0.75],
-      [side * 0.93, 1.79, -0.65],
-    ]);
-    pane([
-      [side * 1.16, 1, 0.73],
-      [side * 0.94, 1.04, 2],
-      [side * 0.7, 1.84, 1.2],
-      [side * 0.93, 1.79, 0.83],
-    ]);
-    rod(g, brass, [side * 1.24, 0.75, -0.4], [side * 1.24, 0.75, -0.1], 0.035);
-    rod(g, black, [side * 1.2, 0.35, -0.8], [side * 1.2, 1.05, -0.8], 0.023);
-    ball(g, navy, [side * 0.56, 1.9, -0.4], [0.32, 0.27, 1]);
-    const exhaust = mesh(
-      g,
-      new T.CylinderGeometry(0.17, 0.17, 0.35, 16),
-      black,
-      [side * 0.56, 1.9, -1.35],
-    );
-    exhaust.rotation.x = Math.PI / 2;
-    ball(
-      g,
-      new T.MeshStandardMaterial({
-        color: side < 0 ? "#944741" : "#7e9e8a",
-        emissive: side < 0 ? "#8b2015" : "#367c56",
-        emissiveIntensity: 1,
-      }),
-      [side * 1.22, 1, -0.9],
-      [0.06, 0.05, 0.06],
-    );
-  }
-  rod(g, black, [0, 1.75, -1.3], [0, 2.65, -1.8], 0.018);
-  rod(g, black, [0, 0.3, 1.3], [0, -0.2, 1.45], 0.02);
-  rod(g, navy, [0, 1.2, -1.3], [0, 1.7, -5], 0.22);
-  box(g, navy, [0, 2.15, -4.6], [0.12, 1.4, 0.8]);
-  for (const x of [-1, 1]) {
-    rod(g, black, [x, 0.2, -1], [x, -0.35, -1], 0.07);
-    rod(g, black, [x, 0.2, 1], [x, -0.35, 1], 0.07);
-    rod(g, brass, [x, -0.4, -1.8], [x, -0.4, 1.9], 0.07);
-  }
-  rod(g, black, [0, 1.8, 0], [0, 2.7, 0], 0.12);
-  const rotor = new T.Group();
-  rotor.position.y = 2.7;
-  g.add(rotor);
-  box(rotor, black, [0, 0, 0], [9, 0.055, 0.18]);
-  box(rotor, black, [0, 0, 0], [0.18, 0.055, 9]);
+  const root = new T.Group(),
+    model = humanAssets.helicopter.scene.clone(true);
+  root.add(model);
+  model.traverse((o) => {
+    if (o.isMesh) {
+      o.castShadow = !o.material.transparent;
+      o.receiveShadow = true;
+      o.material.userData.sharedMaps = true;
+      if (o.material.name.includes("glass")) {
+        o.material = o.material.clone();
+        o.material.depthWrite = false;
+        o.material.opacity = 0.19;
+        o.material.side = T.DoubleSide;
+      }
+    }
+  });
+  const rotor = model.getObjectByName("MainRotor") || new T.Group();
+  rotor.userData.dynamic = true;
+  const tailBlades = model.getObjectByName("ec135_Tblade");
   const tailRotor = new T.Group();
-  tailRotor.position.set(0.2, 1.8, -4.8);
-  g.add(tailRotor);
-  box(tailRotor, black, [0, 0, 0], [0.04, 1.5, 0.1]);
-  box(tailRotor, black, [0, 0, 0], [0.04, 0.1, 1.5]);
-  g.userData.tailRotor = tailRotor;
-  g.userData.rotor = rotor;
-  return g;
+  tailRotor.userData.dynamic = true;
+  root.add(tailRotor);
+  if (tailBlades) {
+    root.updateMatrixWorld(true);
+    const center = new T.Box3()
+      .setFromObject(tailBlades)
+      .getCenter(new T.Vector3());
+    tailRotor.position.copy(root.worldToLocal(center));
+    tailRotor.updateMatrixWorld(true);
+    tailRotor.attach(tailBlades);
+  }
+  batchArchitecture(model);
+  const pilot = explorer();
+  pilot.name = "Pilot / visible cockpit crew";
+  pilot.userData.human?.model.traverse((o) => {
+    if (o.material?.name === "Clothing") o.material.color.set("#485a66");
+  });
+  pilot.scale.setScalar(0.82);
+  pilot.position.set(-0.43, 0.46, 1.67);
+  root.add(pilot);
+  const trim = mat("#292e2e"),
+    fabric = mat("#404742", 0.96);
+  for (const x of [-0.43, 0.43]) {
+    box(root, fabric, [x, 1.1, 1.57], [0.47, 0.15, 0.53]);
+    box(root, fabric, [x, 1.5, 1.28], [0.47, 0.7, 0.15]);
+  }
+  for (const x of [-0.14, 0.14])
+    ball(pilot, trim, [x, 1.93, -0.015], [0.045, 0.07, 0.06]);
+  rod(pilot, trim, [-0.14, 1.94, 0], [0, 2.04, 0], 0.018);
+  rod(pilot, trim, [0, 2.04, 0], [0.14, 1.94, 0], 0.018);
+  rod(pilot, trim, [-0.14, 1.91, 0.02], [-0.06, 1.83, 0.14], 0.012);
+  const cockpit = new T.PointLight("#b8d5c4", 2.5, 2.7, 2);
+  cockpit.position.set(-0.25, 1.8, 2.15);
+  root.add(cockpit);
+  const landingLight = new T.SpotLight(
+    "#e7ede5",
+    45,
+    28,
+    Math.PI / 5,
+    0.6,
+    1.5,
+  );
+  landingLight.position.set(0, 0.95, 2.65);
+  landingLight.target.position.set(0, -1, 10);
+  root.add(landingLight, landingLight.target);
+  const posePilot = () => {
+    animateExplorer(pilot, 0);
+    poseArm(pilot, "R", [-0.28, 1.08, 0.55], [-0.5, 1.1, 0.1]);
+    poseArm(pilot, "L", [0.25, 1.02, 0.45], [0.48, 1.1, 0.1]);
+    poseLimb(
+      pilot,
+      ["Bip01_L_Thigh", "Bip01_L_Calf", "Bip01_L_Foot"],
+      [0.14, 0.12, 0.43],
+      [0.2, 0.8, 0.65],
+    );
+    poseLimb(
+      pilot,
+      ["Bip01_R_Thigh", "Bip01_R_Calf", "Bip01_R_Foot"],
+      [-0.14, 0.12, 0.43],
+      [-0.2, 0.8, 0.65],
+    );
+  };
+  posePilot();
+  root.userData = {
+    rotor,
+    tailRotor,
+    pilot,
+    landingLight,
+    posePilot,
+    rotorSpeed: 30,
+  };
+  return root;
 }
 
-// Human anatomy remains intact; missing facial detail is deliberate shadow,
-// rather than a monster mask, enlarged limbs or glowing eyes.
+// Manufactured android: articulated ceramic shells, exposed servos and optical sensors.
 export function presence() {
   const root = explorer();
-  root.name = "Unidentified figure";
-  root.traverse((o) => {
-    if (!o.isMesh) return;
-    const old = o.material;
-    o.material = old.clone();
-    o.material.color.set(old?.name === "FaceSkin" ? "#11161a" : "#293238");
-    o.material.roughness = 0.94;
-    o.material.metalness = 0;
-    o.material.userData.sharedMaps = true;
-    old?.dispose();
-  });
+  setActorRole(root, "android");
+  root.name = "Institute security android";
   root.userData.kind = "presence";
-  root.userData.hitRadius = 0.44;
-  root.userData.state = "patrolling";
+  root.userData.hitRadius = 0.4;
+  root.userData.state = "scanning";
+  equipStunGun(root);
+  const laser = new T.Line(
+    new T.BufferGeometry().setFromPoints([
+      new T.Vector3(),
+      new T.Vector3(0, 0, 7),
+    ]),
+    new T.LineBasicMaterial({
+      color: "#d48952",
+      transparent: true,
+      opacity: 0.35,
+    }),
+  );
+  root.add(laser);
+  root.userData.laser = laser;
+  laser.visible = false;
   return root;
 }
 export function animatePresence(root, time, speed = 0) {
   animateExplorer(root, time, speed);
   const s = root.userData;
+  s.aiming = s.state === "aiming";
   if (s.human) {
-    s.human.model.rotation.x =
-      s.stun > 0 ? 0.16 : s.state === "winding" ? -0.13 : 0;
+    s.human.model.rotation.x = s.stun > 0 ? 0.16 : speed > 0.025 ? 0.055 : 0;
     if (s.stun > 0) s.head.rotation.z = 0.18;
-    if (s.state === "winding" || s.state === "rushing") {
-      poseArm(
-        root,
-        "R",
-        [-0.28, 1.42, s.state === "rushing" ? 0.8 : 0.3],
-        [-0.55, 1.25, 0.05],
-      );
-    }
+  }
+  poseCombat(root, time);
+  if (s.laser) {
+    s.laser.visible = s.aiming && s.stun <= 0;
+    s.laser.position
+      .copy(s.weapon.gun.position)
+      .add(new T.Vector3(0, 0.02, 0.35));
   }
 }
 
 // Analytic two-bone arm pose, applied after the native body animation.
 // Targets are in actor-local metres and work with any normalized human rig.
 function poseArm(root, side, handTarget, bendTarget) {
+  poseLimb(
+    root,
+    [`Bip01_${side}_UpperArm`, `Bip01_${side}_Forearm`, `Bip01_${side}_Hand`],
+    handTarget,
+    bendTarget,
+  );
+}
+export function poseLimb(root, names, handTarget, bendTarget) {
   const model = root.userData.human?.model;
   if (!model) return;
-  const upper = model.getObjectByName(`Bip01_${side}_UpperArm`),
-    fore = model.getObjectByName(`Bip01_${side}_Forearm`),
-    hand = model.getObjectByName(`Bip01_${side}_Hand`);
+  const upper = model.getObjectByName(names[0]),
+    fore = model.getObjectByName(names[1]),
+    hand = model.getObjectByName(names[2]);
   if (!upper || !fore || !hand) return;
   root.updateMatrixWorld(true);
   const a = upper.getWorldPosition(new T.Vector3()),
@@ -693,6 +719,10 @@ export function poseCombat(root, time) {
       );
     }
   } else weapon.gun.position.set(-0.28, 1.3, 0.5);
-  weapon.gun.rotation.set(root.userData.aiming ? 0 : 0.12, 0, 0);
+  weapon.gun.rotation.set(
+    root.userData.aiming ? -(root.userData.aimPitch || 0) : 0.12,
+    0,
+    0,
+  );
   weapon.flash.material.opacity = recoil * 0.9;
 }

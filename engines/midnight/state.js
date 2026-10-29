@@ -68,6 +68,18 @@ export function restoreState(value) {
   s.seen = Array.isArray(value.seen)
     ? [...new Set(value.seen.filter((id) => tower.films[id]))]
     : [];
+  s.techniqueCount =
+    Number.isSafeInteger(value.techniqueCount) && value.techniqueCount >= 0
+      ? value.techniqueCount
+      : 0;
+  s.defeated = Array.isArray(value.defeated)
+    ? value.defeated
+        .filter(
+          (v) =>
+            typeof v === "string" && /^(normal|escape):\d{1,2}:\d$/.test(v),
+        )
+        .slice(0, 180)
+    : [];
   const validFlags = [
     "guidebot",
     "researcher",
@@ -105,8 +117,8 @@ export function restoreState(value) {
     Number.isFinite(value.position.z)
   )
     s.position = {
-      x: Math.max(-12, Math.min(12, value.position.x)),
-      z: Math.max(-10, Math.min(10, value.position.z)),
+      x: Math.max(-17, Math.min(17, value.position.x)),
+      z: Math.max(-15, Math.min(15, value.position.z)),
     };
   else s.position = s.floor === 0 ? { x: -6, z: 4 } : { x: -8, z: 7 };
   const allowed = [tower.rooms[s.floor].entry];

@@ -24,3 +24,4 @@ jobs:
       - run: python tests/midnight_browser.py
       - run: python tests/actors_browser.py
       - run: python tests/combat_browser.py
+      - run: python tests/rebuild_browser.py

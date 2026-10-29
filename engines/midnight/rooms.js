@@ -1,3 +1,4 @@
+import { officeChair, computerDetails } from "./furnishings.js";
 import * as T from "../../vendor/three.module.js";
 import {
   mat,
@@ -10,7 +11,7 @@ import {
   presence,
   setActorRole,
 } from "./actors.js";
-import { instituteShell, partition } from "./architecture.js";
+import { instituteShell, partition, BUILDING } from "./architecture.js";
 import { midnightTower as tower } from "../../towers/tower-0001.js";
 
 export function buildRoom(world, floor, save) {
@@ -69,6 +70,9 @@ export function buildRoom(world, floor, save) {
     return b;
   }
   function desk(x, z, w = 2.8) {
+    officeChair(root, x - w * 0.28, z + 1, Math.PI);
+    colliders.push({ x: x - w * 0.28, z: z + 1, w: 0.65, d: 0.7, h: 0.95 });
+    computerDetails(root, x + 0.45, z);
     box(root, wood, [x, 0.78, z], [w, 0.09, 1.1]);
     for (const dx of [-w / 2 + 0.12, w / 2 - 0.12])
       box(root, steel, [x + dx, 0.38, z], [0.08, 0.76, 0.95]);
@@ -141,12 +145,13 @@ export function buildRoom(world, floor, save) {
     (features.steam ||= []).push(steam);
   }
   if (floor === 0) {
-    colliders.push(...world.obstacles, { x: 8, z: -9.5, w: 8, d: 4, h: 3.5 });
+    colliders.push(...world.obstacles);
+    root.userData.lifts = world.roof.userData.lifts;
     targets.push({
       kind: "stairs",
       core: "B",
-      x: 8,
-      z: -6.5,
+      x: 9,
+      z: -7.2,
       r: 2.2,
       destination: 1,
       label: "Enter the tower · Floor 17",
@@ -470,23 +475,6 @@ export function buildRoom(world, floor, save) {
     );
     targets.push({ id: g.id, kind: "math", x, z, r: 1.9, label: g.label });
   }
-  // Existing short museum escalator routes now use enclosed stair connections;
-  // no decorative escalators stop in midair inside a room.
-  for (const e of tower.escalators.filter(
-    (e) => e.from === floor || e.to === floor,
-  )) {
-    const up = e.to === floor;
-    targets.push({
-      kind: "escalator",
-      x: 11,
-      z: up ? 3.6 : -0.4,
-      r: 1.5,
-      destination: up ? e.from : e.to,
-      label: "Gallery service stair · " + (up ? "up" : "down"),
-    });
-    box(root, steel, [12.6, 1.15, up ? 2.5 : -1.5], [0.18, 2.3, 2]);
-    label("GALLERY STAIR", 11, 2.5, up ? 2.8 : -1.2, 2.5);
-  }
   for (const o of tower.objects.filter(
     (o) =>
       o.floor === floor &&
@@ -539,6 +527,17 @@ export function buildRoom(world, floor, save) {
     });
     if (def.object === "allocation") panel(-4, 2, "10 POWER UNITS");
   }
+  for (const [id, car] of Object.entries(root.userData.lifts || {})) {
+    if (!tower.lifts.find((l) => l.id === id)?.stops.includes(floor)) continue;
+    targets.push({
+      kind: "lift",
+      id,
+      x: car.position.x + 0.7,
+      z: car.position.z - 1.5,
+      r: 1.3,
+      label: "Lift " + id + " · cabin floor controls",
+    });
+  }
   if (def.ladder) {
     for (const x of [10.6, 11.4])
       rod(root, steel, [x, 0, -0.3], [x, 3.3, -0.3], 0.035);
@@ -571,7 +570,12 @@ export function buildRoom(world, floor, save) {
   const count =
     save.flags.ventilation && floor >= 14 && !save.escape
       ? 0
-      : Math.min(4, (def.enemies || 0) + (save.escape && floor >= 17 ? 2 : 0));
+      : Math.min(
+          4,
+          (def.enemies || 0) +
+            (floor > 0 ? 1 : 0) +
+            (save.escape && floor >= 17 ? 2 : 0),
+        );
   const starts = def.threatPositions || [
     [-7, -4],
     [7, -2],
@@ -580,7 +584,8 @@ export function buildRoom(world, floor, save) {
   ];
   for (let i = 0; i < count; i++) {
     const e = presence();
-    const [x, z] = starts[i % starts.length];
+    const [x, z] =
+      i === count - 1 && floor > 0 ? [8.3, -7.05] : starts[i % starts.length];
     e.position.set(x, 0, z);
     e.userData.home = { x, z };
     e.userData.patrol = [
@@ -590,20 +595,40 @@ export function buildRoom(world, floor, save) {
     e.userData.phase = i * 1.3;
     e.userData.stun = 0;
     e.userData.grace = floor === 0 ? 5 : 2;
-    e.userData.disabled = false;
+    e.userData.encounterId = `${save.escape ? "escape" : "normal"}:${floor}:${i}`;
+    e.userData.disabled =
+      save.defeated?.includes(e.userData.encounterId) || false;
+    if (e.userData.disabled) e.userData.knockedAt = -100;
     e.visible = true;
+    root.add(e);
+    enemies.push(e);
+  }
+  if (floor > 0 && floor < 20) {
+    const core = BUILDING.stairs[floor % 2],
+      e = presence();
+    e.position.set(core.x + 0.5, -1.95, core.z + core.sign * 4.9);
+    Object.assign(e.userData, {
+      stairGuard: core.id,
+      home: { x: e.position.x, z: e.position.z, y: -1.95 },
+      stun: 0,
+      grace: 1,
+      encounterId: `${save.escape ? "escape" : "normal"}:${floor}:4`,
+    });
+    e.userData.disabled =
+      save.defeated?.includes(e.userData.encounterId) || false;
+    if (e.userData.disabled) e.userData.knockedAt = -100;
     root.add(e);
     enemies.push(e);
   }
   // A full-height rolling fire door visibly seals the danger when operated.
   if (floor === 1 || floor === 2) {
-    const x = -9,
+    const x = -11.4,
       z = 8.5;
     features.shutter = box(
       root,
       steel,
       [x, sealed ? 1.2 : 3.5, z],
-      [2.6, 2.4, 0.12],
+      [1.1, 2.4, 0.12],
     );
   }
   if (save.flags.guidebot && features.fallen) {
@@ -622,6 +647,18 @@ export function buildRoom(world, floor, save) {
     features,
     animate(t, dt) {
       animations.forEach((fn) => fn(t, dt));
+      for (const car of Object.values(root.userData.lifts || {})) {
+        if (car.userData.targetOpen) {
+          car.userData.open = T.MathUtils.damp(
+            car.userData.open || 0,
+            1,
+            5,
+            dt,
+          );
+          car.userData.setOpen(car.userData.open);
+          car.userData.collider.h = car.userData.open > 0.7 ? 0 : 2.45;
+        }
+      }
       features.steam?.forEach((s, i) => {
         s.visible = (t + i * 2) % 6 > 4.3;
         s.scale.y = 0.8 + Math.sin(t * 7) * 0.1;
